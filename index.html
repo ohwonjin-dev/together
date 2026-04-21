@@ -11,6 +11,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans KR','Segoe UI',sans
 .screen{display:none;flex-direction:column;min-height:100vh}
 .screen.active{display:flex}
 
+/* LOADING */
+#loading-screen{position:fixed;inset:0;background:#0A0A0A;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.loading-spinner{width:36px;height:36px;border:3px solid #2C2C2E;border-top-color:#FF6A00;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:14px;color:#636366}
+
 /* HOME HEADER */
 .home-header{padding:56px 20px 28px;background:#0A0A0A;color:white;border-bottom:1px solid #1C1C1E}
 .home-header-title{font-size:28px;font-weight:800;letter-spacing:-0.5px;color:#FFFFFF}
@@ -45,7 +51,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans KR','Segoe UI',sans
 .gd-header img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
 .gd-header-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.3),rgba(0,0,0,.7))}
 .gd-header-back{position:absolute;top:16px;left:16px;width:36px;height:36px;background:rgba(255,255,255,.12);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.15);border-radius:50%;color:white;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.gd-header-del{position:absolute;top:16px;right:16px;width:36px;height:36px;background:rgba(255,255,255,.12);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.15);border-radius:50%;color:white;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.gd-header-actions{position:absolute;top:16px;right:16px;display:flex;gap:8px}
+.gd-header-btn{width:36px;height:36px;background:rgba(255,255,255,.12);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.15);border-radius:50%;color:white;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .gd-header-content{position:absolute;bottom:0;left:0;right:0;padding:16px 20px 18px;color:white}
 .gd-header-title{font-size:22px;font-weight:800}
 .gd-header-meta{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px}
@@ -133,7 +140,7 @@ textarea.form-input{resize:none}
 .btn-primary:active{opacity:.85}
 
 /* PHOTO UPLOAD */
-.photo-upload{border:1.5px dashed #3A3A3C;border-radius:12px;padding:18px;text-align:center;cursor:pointer;color:#FF6A00;font-size:14px;font-weight:600;background:#161616}
+.photo-upload{border:1.5px dashed #3A3A3C;border-radius:12px;padding:18px;text-align:center;cursor:pointer;color:#FF6A00;font-size:14px;font-weight:600;background:#161616;display:block}
 .photo-previews{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .photo-preview-wrap{position:relative}
 .photo-preview-wrap img{width:76px;height:76px;object-fit:cover;border-radius:10px;display:block}
@@ -151,13 +158,23 @@ textarea.form-input{resize:none}
 .photo-viewer img{max-width:100%;max-height:90vh;object-fit:contain;border-radius:8px}
 .photo-viewer-close{position:absolute;top:20px;right:20px;background:none;border:none;color:white;font-size:28px;cursor:pointer}
 
+/* TOAST */
+#toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1C1C1E;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;border:1px solid #3A3A3C;z-index:500;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1}
+
 ::-webkit-scrollbar{width:0}
 </style>
 </head>
 <body>
 
+<!-- LOADING -->
+<div id="loading-screen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">모임록 불러오는 중…</div>
+</div>
+
 <!-- ===== HOME ===== -->
-<div id="screen-home" class="screen active">
+<div id="screen-home" class="screen">
   <div class="home-header">
     <div class="home-header-title">모임록 📸</div>
     <div class="home-header-sub">소중한 순간을 기록하고 정산까지</div>
@@ -172,7 +189,10 @@ textarea.form-input{resize:none}
     <img id="gd-cover-img" src="" style="display:none">
     <div class="gd-header-overlay"></div>
     <button class="gd-header-back" onclick="showHome()">←</button>
-    <button class="gd-header-del" onclick="deleteGathering()" title="모임 삭제">🗑</button>
+    <div class="gd-header-actions">
+      <button class="gd-header-btn" onclick="shareGathering()" title="링크 공유">🔗</button>
+      <button class="gd-header-btn" onclick="deleteGathering()" title="모임 삭제">🗑</button>
+    </div>
     <div class="gd-header-content">
       <div id="gd-emoji" class="gd-header-emoji"></div>
       <div id="gd-title" class="gd-header-title"></div>
@@ -274,7 +294,18 @@ textarea.form-input{resize:none}
   <img id="photo-viewer-img" src="">
 </div>
 
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
+/* ── SUPABASE ── */
+const { createClient } = window.supabase;
+const sb = createClient(
+  'https://crtzfjdkjfxsaovxiqfv.supabase.co',
+  'sb_publishable_1xCXa4J-IJu0x7g4m-yAyw_sKBBhRrS'
+);
+
 const AVATAR_COLORS = ['#FFB3B3','#FFCBA4','#FFF0A0','#B5EAC8','#A8E6DF','#B3C8F5','#D4B8F0','#FFB8D9'];
 const COVER_EMOJIS = ['📸','🌅','🎉','🍕','🏖️','⛰️','🎮','☕','🎂','🍺','🌸','🏃','🎵','🍜','✈️','🎪','🎸','🏕️','🌃','🎨'];
 
@@ -282,127 +313,140 @@ const state = {
   gatherings: [],
   currentId: null,
   currentTab: 'timeline',
+  realtimeChannel: null,
 };
 
 /* ── INIT ── */
-function init() {
+async function init() {
   buildEmojiGrid();
-  const raw = localStorage.getItem('moim-v2');
-  if (raw) {
-    try { state.gatherings = JSON.parse(raw).gatherings || []; } catch(e) {}
+  await loadFromDB();
+  document.getElementById('loading-screen').style.display = 'none';
+  if (!handleURLRouting()) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-home').classList.add('active');
   }
-  if (!state.gatherings.length) seedSample();
-  purgeLargePhotos();
+}
+
+async function loadFromDB() {
+  try {
+    const [{ data: gs }, { data: acts }, { data: exps }] = await Promise.all([
+      sb.from('gatherings').select('*').order('created_at', { ascending: false }),
+      sb.from('activities').select('*'),
+      sb.from('expenses').select('*'),
+    ]);
+
+    state.gatherings = (gs || []).map(g => ({
+      id: g.id,
+      title: g.title,
+      date: g.date || '',
+      location: g.location || '',
+      members: g.members || [],
+      emoji: g.cover_emoji || '📸',
+      coverPhoto: g.cover_photo || '',
+      activities: (acts || [])
+        .filter(a => a.gathering_id === g.id)
+        .map(a => ({ id: a.id, time: a.time || '', location: a.location || '', memo: a.memo || '', photos: a.photos || [] })),
+      expenses: (exps || [])
+        .filter(e => e.gathering_id === g.id)
+        .map(e => ({ id: e.id, title: e.title, amount: e.amount, paidBy: e.paid_by, splitAmong: e.split_among || [] })),
+    }));
+  } catch(e) {
+    showToast('데이터 불러오기 실패. 네트워크를 확인해주세요.');
+  }
   renderHome();
 }
 
-function purgeLargePhotos() {
-  // Remove base64 photos over 250KB — these are pre-compression leftovers filling up storage
-  const LIMIT = 250000;
-  let removed = 0;
-  state.gatherings.forEach(g => {
-    (g.activities || []).forEach(a => {
-      const before = (a.photos || []).length;
-      a.photos = (a.photos || []).filter(p => !(typeof p === 'string' && p.startsWith('data:') && p.length > LIMIT));
-      removed += before - a.photos.length;
-    });
-  });
-  if (removed > 0) save();
-}
-
-function save() {
-  try {
-    localStorage.setItem('moim-v2', JSON.stringify({ gatherings: state.gatherings }));
+/* ── URL ROUTING ── */
+function handleURLRouting() {
+  const gId = new URLSearchParams(location.search).get('g');
+  if (gId && state.gatherings.find(g => g.id === gId)) {
+    showGathering(gId, false);
     return true;
-  } catch(e) {
-    if (e.name === 'QuotaExceededError' || e.code === 22) {
-      alert('저장 공간이 부족합니다. 사진 수를 줄이거나 오래된 기록을 삭제해주세요.');
-    }
-    return false;
   }
+  return false;
 }
 
-function seedSample() {
-  state.gatherings = [
-    {
-      id: 'sample1', title: '제주도 여행', date: '2026-04-15', emoji: '🏖️',
-      coverPhoto: 'https://images.pexels.com/photos/30966647/pexels-photo-30966647.jpeg?auto=compress&cs=tinysrgb&w=600&h=320&fit=crop',
-      members: ['민준','서연','준혁','지우'],
-      activities: [
-        { id:'a1', time:'10:30', location:'성산일출봉', memo:'드디어 성산일출봉 등반! 날씨가 너무 좋아서 한라산까지 보였다 😍', photos:[] },
-        { id:'a2', time:'13:00', location:'흑돼지 식당', memo:'흑돼지 먹으러 갔는데 사실 한치 오돌뼈가 더 맛있었다는 결론', photos:[] },
-        { id:'a3', time:'16:00', location:'협재 해수욕장', memo:'에메랄드빛 바다에서 스노클링! 물고기가 발 주변에 막 와서 깜짝 놀람', photos:[] },
-      ],
-      expenses: [
-        { id:'e1', title:'렌트카', amount:120000, paidBy:'민준', splitAmong:['민준','서연','준혁','지우'] },
-        { id:'e2', title:'흑돼지 점심', amount:92000, paidBy:'서연', splitAmong:['민준','서연','준혁','지우'] },
-        { id:'e3', title:'성산일출봉 입장료', amount:24000, paidBy:'준혁', splitAmong:['민준','서연','준혁','지우'] },
-        { id:'e4', title:'편의점 + 커피', amount:38000, paidBy:'지우', splitAmong:['민준','서연','준혁','지우'] },
-      ],
-    },
-    {
-      id: 'sample2', title: '민준 생일파티 🎂', date: '2026-03-22', emoji: '🎉',
-      coverPhoto: 'https://images.pexels.com/photos/7180207/pexels-photo-7180207.jpeg?auto=compress&cs=tinysrgb&w=600&h=320&fit=crop',
-      members: ['민준','서연','지우','하은','태양'],
-      activities: [
-        { id:'b1', time:'18:00', location:'홍대 루프탑 바', memo:'깜짝 파티 성공! 민준이 완전 놀람 ㅋㅋ', photos:[] },
-        { id:'b2', time:'20:30', location:'연남동 이탈리안', memo:'파스타랑 피자 엄청 시켰는데 다 먹음. 배터짐', photos:[] },
-        { id:'b3', time:'23:00', location:'노래방 코인', memo:'3시간 동안 떼창. 목 터짐 주의', photos:[] },
-      ],
-      expenses: [
-        { id:'f1', title:'케이크', amount:54000, paidBy:'서연', splitAmong:['서연','지우','하은','태양'] },
-        { id:'f2', title:'저녁 식사', amount:186000, paidBy:'하은', splitAmong:['민준','서연','지우','하은','태양'] },
-        { id:'f3', title:'노래방', amount:75000, paidBy:'태양', splitAmong:['민준','서연','지우','하은','태양'] },
-        { id:'f4', title:'술 & 음료', amount:62000, paidBy:'지우', splitAmong:['민준','서연','지우','하은','태양'] },
-      ],
-    },
-    {
-      id: 'sample3', title: '북한산 등산', date: '2026-02-08', emoji: '⛰️',
-      coverPhoto: 'https://images.pexels.com/photos/35644310/pexels-photo-35644310.jpeg?auto=compress&cs=tinysrgb&w=600&h=320&fit=crop',
-      members: ['준혁','태양','민준'],
-      activities: [
-        { id:'c1', time:'07:00', location:'북한산 입구', memo:'아침 7시 집합. 추워서 다들 껴입고 나타남', photos:[] },
-        { id:'c2', time:'10:30', location:'백운대 정상', memo:'드디어 정상! 서울 전경이 한눈에. 뿌듯 그 자체', photos:[] },
-        { id:'c3', time:'13:00', location:'산 아래 막국수집', memo:'하산 후 막국수+수육 조합은 진리', photos:[] },
-      ],
-      expenses: [
-        { id:'g1', title:'교통비 (카풀)', amount:30000, paidBy:'준혁', splitAmong:['준혁','태양','민준'] },
-        { id:'g2', title:'점심 막국수', amount:42000, paidBy:'민준', splitAmong:['준혁','태양','민준'] },
-        { id:'g3', title:'간식 & 음료', amount:18000, paidBy:'태양', splitAmong:['준혁','태양','민준'] },
-      ],
-    },
-    {
-      id: 'sample4', title: '강릉 당일치기', date: '2026-01-18', emoji: '☕',
-      coverPhoto: 'https://images.pexels.com/photos/17140838/pexels-photo-17140838.jpeg?auto=compress&cs=tinysrgb&w=600&h=320&fit=crop',
-      members: ['서연','지우','하은'],
-      activities: [
-        { id:'d1', time:'09:30', location:'안목 해변 커피거리', memo:'인생 커피 발견. 파도 소리 들으며 마시는 아메리카노 최고', photos:[] },
-        { id:'d2', time:'12:00', location:'강릉 중앙시장', memo:'순두부찌개 + 감자전 + 오징어튀김. 돈 5천원어치 먹은 느낌', photos:[] },
-        { id:'d3', time:'15:00', location:'경포대', memo:'겨울 바다 특유의 쓸쓸함과 낭만이 공존', photos:[] },
-      ],
-      expenses: [
-        { id:'h1', title:'기차 왕복', amount:96000, paidBy:'지우', splitAmong:['서연','지우','하은'] },
-        { id:'h2', title:'점심', amount:38000, paidBy:'서연', splitAmong:['서연','지우','하은'] },
-        { id:'h3', title:'카페', amount:24000, paidBy:'하은', splitAmong:['서연','지우','하은'] },
-      ],
-    },
-  ];
-  save();
+window.addEventListener('popstate', () => {
+  const gId = new URLSearchParams(location.search).get('g');
+  if (gId && state.gatherings.find(g => g.id === gId)) {
+    showGathering(gId, false);
+  } else {
+    showHome(false);
+  }
+});
+
+/* ── REALTIME ── */
+function subscribeToGathering(gId) {
+  if (state.realtimeChannel) sb.removeChannel(state.realtimeChannel);
+
+  state.realtimeChannel = sb.channel('room-' + gId)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activities', filter: `gathering_id=eq.${gId}` },
+      async (payload) => {
+        const g = cur();
+        if (!g || g.activities.find(a => a.id === payload.new.id)) return;
+        const { data } = await sb.from('activities').select('*').eq('id', payload.new.id).single();
+        if (data) {
+          g.activities.push({ id: data.id, time: data.time || '', location: data.location || '', memo: data.memo || '', photos: data.photos || [] });
+          renderTimeline();
+        }
+      })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'activities', filter: `gathering_id=eq.${gId}` },
+      (payload) => {
+        const g = cur();
+        if (!g) return;
+        g.activities = g.activities.filter(a => a.id !== payload.old.id);
+        renderTimeline();
+      })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'expenses', filter: `gathering_id=eq.${gId}` },
+      async (payload) => {
+        const g = cur();
+        if (!g || g.expenses.find(e => e.id === payload.new.id)) return;
+        const { data } = await sb.from('expenses').select('*').eq('id', payload.new.id).single();
+        if (data) {
+          g.expenses.push({ id: data.id, title: data.title, amount: data.amount, paidBy: data.paid_by, splitAmong: data.split_among || [] });
+          renderSettlement();
+        }
+      })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'expenses', filter: `gathering_id=eq.${gId}` },
+      (payload) => {
+        const g = cur();
+        if (!g) return;
+        g.expenses = g.expenses.filter(e => e.id !== payload.old.id);
+        renderSettlement();
+      })
+    .subscribe();
 }
 
 /* ── NAVIGATION ── */
-function showHome() {
+function showHome(pushState = true) {
+  if (state.realtimeChannel) { sb.removeChannel(state.realtimeChannel); state.realtimeChannel = null; }
+  if (pushState) history.pushState({}, '', location.pathname);
   renderHome();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-home').classList.add('active');
 }
 
-function showGathering(id) {
+function showGathering(id, pushState = true) {
   state.currentId = id;
   state.currentTab = 'timeline';
+  if (pushState) history.pushState({}, '', `?g=${id}`);
   renderGathering();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-gathering').classList.add('active');
+  subscribeToGathering(id);
+}
+
+function shareGathering() {
+  const url = `${location.origin}${location.pathname}?g=${state.currentId}`;
+  if (navigator.share) {
+    navigator.share({ title: cur()?.title || '모임록', url }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(url)
+      .then(() => showToast('🔗 링크가 복사됐어요! 카톡으로 공유해보세요.'))
+      .catch(() => {
+        prompt('아래 링크를 복사해서 공유하세요:', url);
+      });
+  }
 }
 
 /* ── HOME ── */
@@ -414,9 +458,8 @@ function renderHome() {
   }
   el.innerHTML = state.gatherings.map(g => {
     const total = g.expenses.reduce((s,e) => s+e.amount, 0);
-    const coverStyle = g.coverPhoto ? `background:#222` : '';
     return `<div class="gathering-card" onclick="showGathering('${g.id}')">
-      <div class="gc-cover" style="${coverStyle}">
+      <div class="gc-cover" ${g.coverPhoto ? 'style="background:#222"' : ''}>
         ${g.coverPhoto ? `<img src="${g.coverPhoto}">` : `<span style="font-size:54px;z-index:1">${g.emoji||'📸'}</span>`}
         <div class="gc-cover-overlay"></div>
       </div>
@@ -466,7 +509,7 @@ function renderTimeline() {
       <div class="tl-card">
         ${act.location ? `<div class="tl-location">📍 ${esc(act.location)}</div>` : ''}
         ${act.memo ? `<div class="tl-memo">${esc(act.memo)}</div>` : ''}
-        ${act.photos && act.photos.length ? `<div class="tl-photos">${act.photos.map(p=>`<img class="tl-photo" src="${p}" onclick="viewPhoto('${p}')" loading="lazy">`).join('')}</div>` : ''}
+        ${act.photos?.length ? `<div class="tl-photos">${act.photos.map(p=>`<img class="tl-photo" src="${p}" onclick="viewPhoto('${p}')" loading="lazy">`).join('')}</div>` : ''}
         <div class="tl-footer"><button class="del-btn" onclick="deleteActivity('${act.id}')">🗑 삭제</button></div>
       </div>
     </div>`).join('')}</div>`;
@@ -560,17 +603,17 @@ function fabAction() {
 
 /* ── SETTLEMENT CALC ── */
 function calcSettlement(members, expenses) {
-  const paid = {}, owes = {};
+  const paid={}, owes={};
   members.forEach(m=>{ paid[m]=0; owes[m]=0; });
   expenses.forEach(e=>{
     if(paid[e.paidBy]!==undefined) paid[e.paidBy]+=e.amount;
-    const share = e.amount / e.splitAmong.length;
+    const share=e.amount/e.splitAmong.length;
     e.splitAmong.forEach(m=>{ if(owes[m]!==undefined) owes[m]+=share; });
   });
   const balance={};
   members.forEach(m=>{ balance[m]=(paid[m]||0)-(owes[m]||0); });
-  const debtors = members.filter(m=>balance[m]<-0.5).map(m=>({name:m,amount:-balance[m]})).sort((a,b)=>b.amount-a.amount);
-  const creditors = members.filter(m=>balance[m]>0.5).map(m=>({name:m,amount:balance[m]})).sort((a,b)=>b.amount-a.amount);
+  const debtors=members.filter(m=>balance[m]<-0.5).map(m=>({name:m,amount:-balance[m]})).sort((a,b)=>b.amount-a.amount);
+  const creditors=members.filter(m=>balance[m]>0.5).map(m=>({name:m,amount:balance[m]})).sort((a,b)=>b.amount-a.amount);
   const transactions=[];
   let i=0,j=0;
   while(i<debtors.length&&j<creditors.length){
@@ -593,7 +636,7 @@ function buildEmojiGrid() {
 }
 
 function pickEmoji(e) {
-  selEmoji = e;
+  selEmoji=e;
   document.querySelectorAll('.emoji-opt').forEach(el=>el.classList.toggle('selected',el.dataset.e===e));
 }
 
@@ -601,8 +644,7 @@ function openNewGathering() {
   document.getElementById('ng-title').value='';
   document.getElementById('ng-date').value=toDay();
   document.getElementById('ng-members').value='';
-  selEmoji='📸';
-  buildEmojiGrid();
+  selEmoji='📸'; buildEmojiGrid();
   document.getElementById('modal-new-gathering').classList.add('active');
 }
 
@@ -610,14 +652,22 @@ function closeNewGathering() {
   document.getElementById('modal-new-gathering').classList.remove('active');
 }
 
-function saveNewGathering() {
+async function saveNewGathering() {
   const title = document.getElementById('ng-title').value.trim();
-  if(!title){ alert('모임 이름을 입력해주세요'); return; }
+  if (!title) { alert('모임 이름을 입력해주세요'); return; }
   const date = document.getElementById('ng-date').value;
   const membersRaw = document.getElementById('ng-members').value;
   const members = membersRaw ? membersRaw.split(',').map(m=>m.trim()).filter(Boolean) : [];
-  state.gatherings.unshift({ id:'g'+Date.now(), title, date, emoji:selEmoji, coverPhoto:null, members, activities:[], expenses:[] });
-  save(); closeNewGathering(); renderHome();
+  const id = 'g' + Date.now();
+
+  const { error } = await sb.from('gatherings').insert({
+    id, title, date, members, cover_emoji: selEmoji, cover_photo: null, location: ''
+  });
+  if (error) { alert('저장 실패: ' + error.message); return; }
+
+  state.gatherings.unshift({ id, title, date, emoji: selEmoji, coverPhoto: '', members, activities: [], expenses: [] });
+  closeNewGathering();
+  renderHome();
 }
 
 /* ── ADD ACTIVITY ── */
@@ -632,7 +682,6 @@ function openAddActivity() {
   document.getElementById('act-memo').value = '';
   document.getElementById('act-previews').innerHTML = '';
   showActError('');
-  // Replace file input to clear previous selection (iOS-safe reset)
   const old = document.getElementById('act-file');
   const fresh = old.cloneNode(false);
   old.parentNode.replaceChild(fresh, old);
@@ -667,12 +716,9 @@ function closeAddActivity() {
 }
 
 function compressImageFile(file, callback) {
-  // Use createObjectURL instead of FileReader base64 — avoids 10~20MB string in memory
-  // that blocks iOS main thread on large photos
   const url = URL.createObjectURL(file);
   const img = new Image();
   const cleanup = () => URL.revokeObjectURL(url);
-
   const tryCompress = (quality) => {
     try {
       const MAX = 1080;
@@ -682,18 +728,12 @@ function compressImageFile(file, callback) {
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      let out = canvas.toDataURL('image/jpeg', quality);
-      // If still over 300KB (base64 ~400KB string), reduce quality and retry
+      const out = canvas.toDataURL('image/jpeg', quality);
       if (out.length > 400000 && quality > 0.3) return tryCompress(quality - 0.1);
       return out && out.length > 100 ? out : null;
     } catch(e) { return null; }
   };
-
-  img.onload = function() {
-    cleanup();
-    const result = tryCompress(0.75);
-    callback(result);
-  };
+  img.onload = function() { cleanup(); callback(tryCompress(0.75)); };
   img.onerror = function() { cleanup(); callback(null); };
   img.src = url;
 }
@@ -720,11 +760,9 @@ function renderPreviews() {
     </div>`).join('');
 }
 
-function removePendingPhoto(i) {
-  pendingPhotos.splice(i,1); renderPreviews();
-}
+function removePendingPhoto(i) { pendingPhotos.splice(i,1); renderPreviews(); }
 
-function saveActivity() {
+async function saveActivity() {
   showActError('');
   if (compressionCount > 0) { showActError('사진 처리 중입니다. 잠시 후 다시 시도해주세요.'); return; }
   const g = cur();
@@ -733,37 +771,43 @@ function saveActivity() {
   const location = document.getElementById('act-location').value.trim();
   const memo = document.getElementById('act-memo').value.trim();
   if (!location && !memo && !pendingPhotos.length) { showActError('장소, 메모, 사진 중 하나 이상 입력해주세요.'); return; }
-  const act = { id: 'a' + Date.now(), time, location, memo, photos: [...pendingPhotos] };
-  g.activities.push(act);
-  if (!save()) { g.activities.pop(); showActError('저장 실패: 저장 공간이 부족합니다. 오래된 기록의 사진을 삭제해주세요.'); return; }
+
+  const id = 'a' + Date.now();
+  const photos = [...pendingPhotos];
+
+  const btn = document.getElementById('act-save-btn');
+  btn.textContent = '저장 중…'; btn.disabled = true;
+
+  const { error } = await sb.from('activities').insert({ id, gathering_id: g.id, time, location, memo, photos });
+  if (error) { showActError('저장 실패: ' + error.message); btn.textContent='기록 저장'; btn.disabled=false; return; }
+
+  g.activities.push({ id, time, location, memo, photos });
   closeAddActivity();
   renderTimeline();
 }
 
-function deleteActivity(id) {
-  if(!confirm('이 기록을 삭제할까요?')) return;
-  cur().activities = cur().activities.filter(a=>a.id!==id);
-  save(); renderTimeline();
+async function deleteActivity(id) {
+  if (!confirm('이 기록을 삭제할까요?')) return;
+  const { error } = await sb.from('activities').delete().eq('id', id);
+  if (error) { alert('삭제 실패'); return; }
+  cur().activities = cur().activities.filter(a => a.id !== id);
+  renderTimeline();
 }
 
 /* ── ADD EXPENSE ── */
-let selPayer = null;
-let selSplit = [];
+let selPayer = null, selSplit = [];
 
 function openAddExpense() {
   const g = cur();
-  if(!g.members.length){ alert('멤버가 없어요. 모임에 멤버를 추가해야 정산할 수 있어요.\n모임을 삭제하고 다시 만들거나 멤버가 있는 모임을 이용해주세요.'); return; }
+  if (!g.members.length) { alert('멤버가 없어요. 모임을 다시 만들거나 멤버가 있는 모임을 이용해주세요.'); return; }
   document.getElementById('exp-title').value='';
   document.getElementById('exp-amount').value='';
-  selPayer = g.members[0];
-  selSplit = [...g.members];
+  selPayer=g.members[0]; selSplit=[...g.members];
   renderPayer(); renderSplit();
   document.getElementById('modal-add-expense').classList.add('active');
 }
 
-function closeAddExpense() {
-  document.getElementById('modal-add-expense').classList.remove('active');
-}
+function closeAddExpense() { document.getElementById('modal-add-expense').classList.remove('active'); }
 
 function renderPayer() {
   const g = cur();
@@ -775,9 +819,7 @@ function renderPayer() {
     </div>`).join('')}</div>`;
 }
 
-function pickPayer(name) {
-  selPayer=name; renderPayer();
-}
+function pickPayer(name) { selPayer=name; renderPayer(); }
 
 function renderSplit() {
   const g = cur();
@@ -786,34 +828,43 @@ function renderSplit() {
 }
 
 function toggleSplit(name) {
-  if(selSplit.includes(name)){
-    if(selSplit.length>1) selSplit=selSplit.filter(m=>m!==name);
-  } else { selSplit.push(name); }
+  if (selSplit.includes(name)) { if (selSplit.length>1) selSplit=selSplit.filter(m=>m!==name); }
+  else selSplit.push(name);
   renderSplit();
 }
 
-function saveExpense() {
+async function saveExpense() {
   const title = document.getElementById('exp-title').value.trim();
   const amount = parseFloat(document.getElementById('exp-amount').value);
-  if(!title){ alert('항목명을 입력해주세요'); return; }
-  if(!amount||amount<=0){ alert('올바른 금액을 입력해주세요'); return; }
-  if(!selPayer){ alert('결제자를 선택해주세요'); return; }
-  if(!selSplit.length){ alert('분담 인원을 선택해주세요'); return; }
-  cur().expenses.push({ id:'e'+Date.now(), title, amount, paidBy:selPayer, splitAmong:[...selSplit] });
-  save(); closeAddExpense(); renderSettlement();
+  if (!title) { alert('항목명을 입력해주세요'); return; }
+  if (!amount||amount<=0) { alert('올바른 금액을 입력해주세요'); return; }
+  if (!selPayer) { alert('결제자를 선택해주세요'); return; }
+  if (!selSplit.length) { alert('분담 인원을 선택해주세요'); return; }
+
+  const id = 'e' + Date.now();
+  const { error } = await sb.from('expenses').insert({ id, gathering_id: cur().id, title, amount, paid_by: selPayer, split_among: selSplit });
+  if (error) { alert('저장 실패: ' + error.message); return; }
+
+  cur().expenses.push({ id, title, amount, paidBy: selPayer, splitAmong: [...selSplit] });
+  closeAddExpense();
+  renderSettlement();
 }
 
-function deleteExpense(id) {
-  if(!confirm('이 지출을 삭제할까요?')) return;
-  cur().expenses = cur().expenses.filter(e=>e.id!==id);
-  save(); renderSettlement();
+async function deleteExpense(id) {
+  if (!confirm('이 지출을 삭제할까요?')) return;
+  const { error } = await sb.from('expenses').delete().eq('id', id);
+  if (error) { alert('삭제 실패'); return; }
+  cur().expenses = cur().expenses.filter(e => e.id !== id);
+  renderSettlement();
 }
 
 /* ── DELETE GATHERING ── */
-function deleteGathering() {
-  if(!confirm(`"${cur().title}" 모임을 삭제할까요?\n모든 기록과 정산 내역이 사라집니다.`)) return;
-  state.gatherings = state.gatherings.filter(g=>g.id!==state.currentId);
-  save(); showHome();
+async function deleteGathering() {
+  if (!confirm(`"${cur().title}" 모임을 삭제할까요?\n모든 기록과 정산 내역이 사라집니다.`)) return;
+  const { error } = await sb.from('gatherings').delete().eq('id', state.currentId);
+  if (error) { alert('삭제 실패'); return; }
+  state.gatherings = state.gatherings.filter(g => g.id !== state.currentId);
+  showHome();
 }
 
 /* ── PHOTO VIEWER ── */
@@ -821,17 +872,25 @@ function viewPhoto(src) {
   document.getElementById('photo-viewer-img').src=src;
   document.getElementById('photo-viewer').classList.add('active');
 }
-function closePhotoViewer() {
-  document.getElementById('photo-viewer').classList.remove('active');
-}
+function closePhotoViewer() { document.getElementById('photo-viewer').classList.remove('active'); }
 
 /* ── MODAL OVERLAY ── */
 function handleOverlayClick(e, id) {
-  if(e.target.classList.contains('modal-overlay')) document.getElementById(id).classList.remove('active');
+  if (e.target.classList.contains('modal-overlay')) document.getElementById(id).classList.remove('active');
+}
+
+/* ── TOAST ── */
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
 }
 
 /* ── UTILS ── */
-function cur() { return state.gatherings.find(g=>g.id===state.currentId); }
+function cur() { return state.gatherings.find(g => g.id === state.currentId); }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtMoney(n){ return Math.round(n).toLocaleString('ko-KR')+'원'; }
 function fmtDate(d){
