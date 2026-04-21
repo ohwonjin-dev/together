@@ -666,41 +666,49 @@ function closeAddActivity() {
   document.getElementById('modal-add-activity').classList.remove('active');
 }
 
-function compressImage(dataUrl, callback) {
-  let called = false;
-  const done = (result) => {
-    if (called) return;
-    called = true;
-    callback(result);
-  };
-  // 10s safety timeout — prevents compressionCount stuck if browser hangs
-  const timer = setTimeout(() => done(dataUrl), 10000);
+function compressImageFile(file, callback) {
+  // Use createObjectURL instead of FileReader base64 — avoids 10~20MB string in memory
+  // that blocks iOS main thread on large photos
+  const url = URL.createObjectURL(file);
   const img = new Image();
-  img.onload = function() {
-    clearTimeout(timer);
+  const cleanup = () => URL.revokeObjectURL(url);
+
+  const tryCompress = (quality) => {
     try {
-      const MAX = 800;
+      const MAX = 1080;
       let w = img.width, h = img.height;
       if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
       if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      const out = canvas.toDataURL('image/jpeg', 0.55);
-      done(out && out.length > 100 ? out : dataUrl);
-    } catch(e) { done(dataUrl); }
+      let out = canvas.toDataURL('image/jpeg', quality);
+      // If still over 300KB (base64 ~400KB string), reduce quality and retry
+      if (out.length > 400000 && quality > 0.3) return tryCompress(quality - 0.1);
+      return out && out.length > 100 ? out : null;
+    } catch(e) { return null; }
   };
-  img.onerror = function() { clearTimeout(timer); done(dataUrl); };
-  img.src = dataUrl;
+
+  img.onload = function() {
+    cleanup();
+    const result = tryCompress(0.75);
+    callback(result);
+  };
+  img.onerror = function() { cleanup(); callback(null); };
+  img.src = url;
 }
 
 function handleActivityPhotos(input) {
-  Array.from(input.files).forEach(file=>{
+  if (!input.files || !input.files.length) return;
+  Array.from(input.files).forEach(file => {
     compressionCount++;
     updateSaveBtn();
-    const reader=new FileReader();
-    reader.onload=e=>{ compressImage(e.target.result, compressed=>{ pendingPhotos.push(compressed); compressionCount--; renderPreviews(); updateSaveBtn(); }); };
-    reader.readAsDataURL(file);
+    compressImageFile(file, compressed => {
+      if (compressed) pendingPhotos.push(compressed);
+      compressionCount--;
+      renderPreviews();
+      updateSaveBtn();
+    });
   });
 }
 
