@@ -178,7 +178,10 @@ textarea.form-input{resize:none}
 <!-- ===== HOME ===== -->
 <div id="screen-home" class="screen">
   <div class="home-header">
-    <div class="home-header-title">모임록 📸</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="home-header-title" id="app-title-text" onclick="editAppTitle()" style="cursor:pointer">모임록 📸</div>
+      <button onclick="editAppTitle()" style="background:none;border:none;color:#636366;font-size:16px;cursor:pointer;padding:2px 0 0">✏️</button>
+    </div>
     <div class="home-header-sub">소중한 순간을 기록하고 정산까지</div>
   </div>
   <div class="content" id="gathering-list"></div>
@@ -192,6 +195,7 @@ textarea.form-input{resize:none}
     <div class="gd-header-overlay"></div>
     <button class="gd-header-back" onclick="showHome()">←</button>
     <div class="gd-header-actions">
+      <button class="gd-header-btn" onclick="openNewGathering(state.currentId)" title="모임 편집">✏️</button>
       <button class="gd-header-btn" onclick="shareGathering()" title="링크 공유">🔗</button>
       <button class="gd-header-btn" onclick="deleteGathering()" title="모임 삭제">🗑</button>
     </div>
@@ -216,7 +220,7 @@ textarea.form-input{resize:none}
 <div class="modal-overlay" id="modal-new-gathering" onclick="handleOverlayClick(event,'modal-new-gathering')">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-title">새 모임 만들기</div>
+    <div class="modal-title" id="ng-modal-title">새 모임 만들기</div>
     <div class="form-group">
       <label class="form-label">모임 이름 *</label>
       <input class="form-input" id="ng-title" placeholder="예: 제주도 여행, 홍대 생일파티..." maxlength="40">
@@ -233,7 +237,7 @@ textarea.form-input{resize:none}
       <label class="form-label">커버 이모지</label>
       <div class="emoji-grid" id="ng-emoji-grid"></div>
     </div>
-    <button class="btn-primary" onclick="saveNewGathering()">모임 만들기</button>
+    <button class="btn-primary" id="ng-save-btn" onclick="saveNewGathering()">모임 만들기</button>
   </div>
 </div>
 
@@ -321,6 +325,7 @@ const state = {
 /* ── INIT ── */
 async function init() {
   buildEmojiGrid();
+  loadAppTitle();
   await loadFromDB();
   document.getElementById('loading-screen').style.display = 'none';
   if (!handleURLRouting()) {
@@ -632,8 +637,9 @@ function calcSettlement(members, expenses) {
   return {balance,transactions};
 }
 
-/* ── NEW GATHERING ── */
+/* ── NEW / EDIT GATHERING ── */
 let selEmoji = '📸';
+let editingGatheringId = null;
 
 function buildEmojiGrid() {
   document.getElementById('ng-emoji-grid').innerHTML = COVER_EMOJIS.map(e=>
@@ -646,11 +652,26 @@ function pickEmoji(e) {
   document.querySelectorAll('.emoji-opt').forEach(el=>el.classList.toggle('selected',el.dataset.e===e));
 }
 
-function openNewGathering() {
-  document.getElementById('ng-title').value='';
-  document.getElementById('ng-date').value=toDay();
-  document.getElementById('ng-members').value='';
-  selEmoji='📸'; buildEmojiGrid();
+function openNewGathering(gId = null) {
+  editingGatheringId = gId;
+  if (gId) {
+    const g = state.gatherings.find(x => x.id === gId);
+    if (!g) return;
+    document.getElementById('ng-modal-title').textContent = '모임 정보 편집';
+    document.getElementById('ng-save-btn').textContent = '수정 완료';
+    document.getElementById('ng-title').value = g.title;
+    document.getElementById('ng-date').value = g.date;
+    document.getElementById('ng-members').value = g.members.join(', ');
+    selEmoji = g.emoji || '📸';
+  } else {
+    document.getElementById('ng-modal-title').textContent = '새 모임 만들기';
+    document.getElementById('ng-save-btn').textContent = '모임 만들기';
+    document.getElementById('ng-title').value = '';
+    document.getElementById('ng-date').value = toDay();
+    document.getElementById('ng-members').value = '';
+    selEmoji = '📸';
+  }
+  buildEmojiGrid();
   document.getElementById('modal-new-gathering').classList.add('active');
 }
 
@@ -664,16 +685,41 @@ async function saveNewGathering() {
   const date = document.getElementById('ng-date').value;
   const membersRaw = document.getElementById('ng-members').value;
   const members = membersRaw ? membersRaw.split(',').map(m=>m.trim()).filter(Boolean) : [];
-  const id = 'g' + Date.now();
 
-  const { error } = await sb.from('gatherings').insert({
-    id, title, date, members, cover_emoji: selEmoji, cover_photo: null, location: ''
-  });
-  if (error) { alert('저장 실패: ' + error.message); return; }
+  if (editingGatheringId) {
+    const { error } = await sb.from('gatherings').update({
+      title, date, members, cover_emoji: selEmoji
+    }).eq('id', editingGatheringId);
+    if (error) { alert('수정 실패: ' + error.message); return; }
+    const g = state.gatherings.find(x => x.id === editingGatheringId);
+    if (g) { g.title = title; g.date = date; g.members = members; g.emoji = selEmoji; }
+    closeNewGathering();
+    renderGathering();
+  } else {
+    const id = 'g' + Date.now();
+    const { error } = await sb.from('gatherings').insert({
+      id, title, date, members, cover_emoji: selEmoji, cover_photo: null, location: ''
+    });
+    if (error) { alert('저장 실패: ' + error.message); return; }
+    state.gatherings.unshift({ id, title, date, emoji: selEmoji, coverPhoto: '', members, activities: [], expenses: [] });
+    closeNewGathering();
+    renderHome();
+  }
+}
 
-  state.gatherings.unshift({ id, title, date, emoji: selEmoji, coverPhoto: '', members, activities: [], expenses: [] });
-  closeNewGathering();
-  renderHome();
+/* ── APP TITLE ── */
+function loadAppTitle() {
+  const saved = localStorage.getItem('app-title');
+  if (saved) document.getElementById('app-title-text').textContent = saved;
+}
+
+function editAppTitle() {
+  const current = document.getElementById('app-title-text').textContent;
+  const next = prompt('앱 이름을 입력해주세요', current);
+  if (next === null) return;
+  const trimmed = next.trim() || '모임록 📸';
+  document.getElementById('app-title-text').textContent = trimmed;
+  localStorage.setItem('app-title', trimmed);
 }
 
 /* ── ADD / EDIT ACTIVITY ── */
