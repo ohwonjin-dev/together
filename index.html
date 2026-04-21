@@ -608,9 +608,11 @@ function saveNewGathering() {
 
 /* ── ADD ACTIVITY ── */
 let pendingPhotos = [];
+let compressionCount = 0;
 
 function openAddActivity() {
   pendingPhotos = [];
+  compressionCount = 0;
   document.getElementById('act-time').value = nowTime();
   document.getElementById('act-location').value = '';
   document.getElementById('act-memo').value = '';
@@ -620,7 +622,22 @@ function openAddActivity() {
   fresh.id = 'act-file';
   fresh.setAttribute('onchange', 'handleActivityPhotos(this)');
   old.parentNode.replaceChild(fresh, old);
+  updateSaveBtn();
   document.getElementById('modal-add-activity').classList.add('active');
+}
+
+function updateSaveBtn() {
+  const btn = document.querySelector('#modal-add-activity .btn-primary');
+  if (!btn) return;
+  if (compressionCount > 0) {
+    btn.textContent = '사진 처리 중…';
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+  } else {
+    btn.textContent = '기록 저장';
+    btn.disabled = false;
+    btn.style.opacity = '';
+  }
 }
 
 function closeAddActivity() {
@@ -644,8 +661,10 @@ function compressImage(dataUrl, callback) {
 
 function handleActivityPhotos(input) {
   Array.from(input.files).forEach(file=>{
+    compressionCount++;
+    updateSaveBtn();
     const reader=new FileReader();
-    reader.onload=e=>{ compressImage(e.target.result, compressed=>{ pendingPhotos.push(compressed); renderPreviews(); }); };
+    reader.onload=e=>{ compressImage(e.target.result, compressed=>{ pendingPhotos.push(compressed); compressionCount--; renderPreviews(); updateSaveBtn(); }); };
     reader.readAsDataURL(file);
   });
 }
@@ -663,13 +682,16 @@ function removePendingPhoto(i) {
 }
 
 function saveActivity() {
+  if (compressionCount > 0) return;
+  const g = cur();
+  if (!g) return;
   const time = document.getElementById('act-time').value || nowTime();
   const location = document.getElementById('act-location').value.trim();
   const memo = document.getElementById('act-memo').value.trim();
   if(!location&&!memo&&!pendingPhotos.length){ alert('장소, 메모 또는 사진 중 하나 이상 입력해주세요'); return; }
   const act = { id:'a'+Date.now(), time, location, memo, photos:[...pendingPhotos] };
-  cur().activities.push(act);
-  if (!save()) { cur().activities.pop(); return; }
+  g.activities.push(act);
+  if (!save()) { g.activities.pop(); return; }
   closeAddActivity(); renderTimeline();
 }
 
