@@ -613,7 +613,11 @@ function openAddActivity() {
   document.getElementById('act-location').value = '';
   document.getElementById('act-memo').value = '';
   document.getElementById('act-previews').innerHTML = '';
-  document.getElementById('act-file').value = '';
+  const old = document.getElementById('act-file');
+  const fresh = old.cloneNode(false);
+  fresh.id = 'act-file';
+  fresh.setAttribute('onchange', 'handleActivityPhotos(this)');
+  old.parentNode.replaceChild(fresh, old);
   document.getElementById('modal-add-activity').classList.add('active');
 }
 
