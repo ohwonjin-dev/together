@@ -685,18 +685,74 @@ function debouncedAutoPhoto(value) {
   autoPhotoTimer = setTimeout(() => fetchAutoPhoto(value), 700);
 }
 
-function fetchAutoPhoto(title) {
-  const kw = toEnglishKeyword(title);
-  const lock = Math.floor(Math.random() * 9000) + 1000;
-  loadCoverPhoto(`https://loremflickr.com/640/360/${kw}?lock=${lock}`, false, title);
+async function fetchAutoPhoto(title) {
+  const ph = document.getElementById('ng-cover-placeholder');
+  document.getElementById('ng-cover-ph-icon').textContent = '⏳';
+  document.getElementById('ng-cover-ph-text').textContent = '사진 추천 중...';
+  ph.style.display = 'flex';
+
+  // KO_EN 맵에서 매칭된 한국어 키워드 우선, 없으면 첫 단어
+  const matchedKo = Object.keys(KO_EN).find(ko => title.includes(ko));
+  const koWord = matchedKo || title.trim().split(/[\s,]+/)[0];
+  // 영어 키워드
+  const enWord = (toEnglishKeyword(title).split(',')[0]) || 'gathering';
+
+  const tryWiki = async (lang, keyword) => {
+    try {
+      const res = await fetch(
+        `https://${lang}.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(keyword)}&prop=pageimages&format=json&pithumbsize=640&origin=*`
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      const pages = data?.query?.pages || {};
+      for (const page of Object.values(pages)) {
+        if (page.thumbnail?.source) return page.thumbnail.source;
+      }
+    } catch(e) {}
+    return null;
+  };
+
+  let imgUrl = await tryWiki('ko', koWord);
+  if (!imgUrl) imgUrl = await tryWiki('en', enWord);
+  if (!imgUrl) {
+    const seed = strHash(title) % 1000;
+    imgUrl = `https://picsum.photos/seed/${seed}/640/360`;
+  }
+  loadCoverPhoto(imgUrl, false, title);
 }
 
-function refreshAutoPhoto() {
+async function refreshAutoPhoto() {
   const title = document.getElementById('ng-title').value.trim();
   if (!title) return;
-  const kw = toEnglishKeyword(title);
-  const lock = Math.floor(Math.random() * 9000) + 1000;
-  loadCoverPhoto(`https://loremflickr.com/640/360/${kw}?lock=${lock}`, false, title);
+  // 새로고침 시 영어 Wikipedia 재시도 + 랜덤 picsum 폴백
+  const enWord = (toEnglishKeyword(title).split(',')[0]) || 'gathering';
+  const ph = document.getElementById('ng-cover-placeholder');
+  document.getElementById('ng-cover-ph-icon').textContent = '⏳';
+  document.getElementById('ng-cover-ph-text').textContent = '다른 사진 찾는 중...';
+  ph.style.display = 'flex';
+  document.getElementById('ng-cover-img').style.opacity = '0';
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(enWord)}&srnamespace=0&format=json&origin=*&srlimit=10`
+    );
+    const data = await res.json();
+    const pages = data?.query?.search || [];
+    for (const p of pages) {
+      const r2 = await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(p.title)}`,
+        { headers: { Accept: 'application/json' } }
+      );
+      if (r2.ok) {
+        const d2 = await r2.json();
+        if (d2.thumbnail?.source) {
+          loadCoverPhoto(d2.thumbnail.source.replace(/\/\d+px-/, '/640px-'), false, title);
+          return;
+        }
+      }
+    }
+  } catch(e) {}
+  const seed = Math.floor(Math.random() * 1000);
+  loadCoverPhoto(`https://picsum.photos/seed/${seed}/640/360`, false, null);
 }
 
 function loadCoverPhoto(url, isUpload, titleHint) {
