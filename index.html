@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>모임록</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{font-size:16px}
+body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans KR','Segoe UI',sans-serif;background:#0A0A0A;color:#FFFFFF;min-height:100vh;max-width:430px;margin:0 auto;overflow-x:hidden}
+.screen{display:none;flex-direction:column;min-height:100vh}
+.screen.active{display:flex}
+
+/* HOME HEADER */
+.home-header{padding:56px 20px 28px;background:#0A0A0A;color:white;border-bottom:1px solid #1C1C1E}
+.home-header-title{font-size:28px;font-weight:800;letter-spacing:-0.5px;color:#FFFFFF}
+.home-header-sub{font-size:14px;color:#636366;margin-top:4px}
+
+/* SIMPLE HEADER */
+.simple-header{padding:0;background:#0A0A0A;display:flex;align-items:stretch;border-bottom:1px solid #1C1C1E;position:sticky;top:0;z-index:100}
+.back-btn{background:none;border:none;font-size:20px;cursor:pointer;padding:16px 12px 16px 16px;color:#FFFFFF;display:flex;align-items:center}
+.simple-header-title{font-size:18px;font-weight:700;flex:1;display:flex;align-items:center;color:#FFFFFF}
+.header-action-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:16px;color:#FFFFFF;display:flex;align-items:center}
+
+/* CONTENT */
+.content{flex:1;padding:20px;overflow-y:auto}
+
+/* FAB */
+.fab{position:fixed;bottom:24px;right:calc(50% - 215px + 24px);width:56px;height:56px;border-radius:50%;background:#FF6A00;color:white;border:none;font-size:28px;cursor:pointer;box-shadow:0 4px 20px rgba(255,106,0,.45);display:flex;align-items:center;justify-content:center;transition:transform .2s;z-index:90}
+.fab:active{transform:scale(.95)}
+@media(max-width:430px){.fab{right:24px}}
+
+/* GATHERING CARD */
+.gathering-card{background:#1C1C1E;border-radius:16px;overflow:hidden;border:1px solid #2C2C2E;margin-bottom:12px;cursor:pointer;transition:transform .15s}
+.gathering-card:active{transform:scale(.98)}
+.gc-cover{height:156px;background:#1A1A2E;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.gc-cover img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.gc-cover-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,transparent,rgba(0,0,0,.5))}
+.gc-body{padding:14px 16px}
+.gc-title{font-size:17px;font-weight:700;margin-bottom:6px;color:#FFFFFF}
+.gc-meta{font-size:12px;color:#636366;display:flex;gap:12px;flex-wrap:wrap}
+
+/* GATHERING DETAIL HEADER */
+.gd-header{position:relative;height:200px;background:#141414;overflow:hidden;flex-shrink:0}
+.gd-header img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.gd-header-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.3),rgba(0,0,0,.7))}
+.gd-header-back{position:absolute;top:16px;left:16px;width:36px;height:36px;background:rgba(255,255,255,.12);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.15);border-radius:50%;color:white;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.gd-header-del{position:absolute;top:16px;right:16px;width:36px;height:36px;background:rgba(255,255,255,.12);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.15);border-radius:50%;color:white;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.gd-header-content{position:absolute;bottom:0;left:0;right:0;padding:16px 20px 18px;color:white}
+.gd-header-title{font-size:22px;font-weight:800}
+.gd-header-meta{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px}
+.gd-header-emoji{font-size:52px;z-index:1;position:relative}
+
+/* TABS */
+.tab-bar{display:flex;background:#0A0A0A;border-bottom:1px solid #2C2C2E;position:sticky;top:0;z-index:90;flex-shrink:0}
+.tab-btn{flex:1;padding:14px;border:none;background:none;font-size:14px;font-weight:600;color:#636366;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .2s;font-family:inherit}
+.tab-btn.active{color:#FF6A00;border-bottom-color:#FF6A00}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* TIMELINE */
+.timeline{padding:4px 0}
+.tl-item{display:flex;gap:14px;margin-bottom:4px}
+.tl-left{display:flex;flex-direction:column;align-items:center;width:46px;flex-shrink:0}
+.tl-time{font-size:11px;font-weight:700;color:#FF6A00;white-space:nowrap}
+.tl-dot{width:13px;height:13px;border-radius:50%;background:#FF6A00;border:2.5px solid #0A0A0A;box-shadow:0 0 0 2px #FF6A00;margin:5px 0;flex-shrink:0}
+.tl-line{flex:1;width:2px;background:linear-gradient(to bottom,#2C2C2E 60%,transparent);min-height:24px}
+.tl-card{flex:1;background:#1C1C1E;border-radius:14px;padding:14px;border:1px solid #2C2C2E;margin-bottom:14px}
+.tl-location{font-size:12px;color:#FF6A00;font-weight:700;display:flex;align-items:center;gap:4px;margin-bottom:6px}
+.tl-memo{font-size:14px;color:#AEAEB2;line-height:1.6}
+.tl-photos{display:flex;gap:8px;margin-top:10px;overflow-x:auto;padding-bottom:4px}
+.tl-photo{width:80px;height:80px;border-radius:10px;object-fit:cover;flex-shrink:0;cursor:pointer}
+.tl-footer{margin-top:10px;display:flex;justify-content:flex-end}
+.del-btn{background:none;border:none;font-size:15px;cursor:pointer;padding:4px;color:#FF453A;opacity:.7}
+.del-btn:hover{opacity:1}
+
+/* SETTLEMENT */
+.total-card{background:#1C1C1E;border-radius:16px;padding:22px;border:1px solid #2C2C2E;margin-bottom:24px}
+.total-label{font-size:12px;color:#636366;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+.total-amount{font-size:34px;font-weight:800;color:#FFFFFF}
+.total-per{font-size:14px;color:#FF6A00;margin-top:6px;font-weight:600}
+.section-title{font-size:11px;font-weight:700;color:#48484A;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+.expense-item{background:#1C1C1E;border-radius:12px;padding:14px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid #2C2C2E}
+.exp-title{font-size:15px;font-weight:600;margin-bottom:3px;color:#FFFFFF}
+.exp-meta{font-size:12px;color:#636366}
+.exp-amount{font-size:16px;font-weight:700;color:#FF6A00}
+.balance-card{background:#1C1C1E;border-radius:14px;padding:14px 16px;border:1px solid #2C2C2E}
+.member-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #2C2C2E}
+.member-row:last-child{border-bottom:none}
+.member-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0}
+.bal-pos{color:#34C759;font-weight:700}
+.bal-neg{color:#FF453A;font-weight:700}
+.bal-zero{color:#48484A;font-weight:600}
+.transfer-card{background:#1C1C1E;border-radius:14px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;border:1px solid #2C2C2E}
+.transfer-amount{font-size:17px;font-weight:700;color:#FF6A00;white-space:nowrap}
+.section-mb{margin-bottom:20px}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:flex-end;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal-sheet{background:#1C1C1E;border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:430px;max-height:90vh;overflow-y:auto;animation:slideUp .3s ease;border-top:1px solid #3A3A3C}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-handle{width:40px;height:4px;background:#3A3A3C;border-radius:2px;margin:0 auto 20px}
+.modal-title{font-size:20px;font-weight:800;margin-bottom:20px;color:#FFFFFF}
+
+/* FORM */
+.form-group{margin-bottom:16px}
+.form-label{font-size:12px;font-weight:600;color:#636366;margin-bottom:8px;display:block;text-transform:uppercase;letter-spacing:.3px}
+.form-input{width:100%;padding:12px 14px;border:1px solid #3A3A3C;border-radius:12px;font-size:15px;color:#FFFFFF;font-family:inherit;outline:none;transition:border-color .2s;background:#2C2C2E}
+.form-input:focus{border-color:#FF6A00}
+textarea.form-input{resize:none}
+
+/* EMOJI GRID */
+.emoji-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.emoji-opt{width:44px;height:44px;border-radius:12px;border:1px solid #3A3A3C;background:#2C2C2E;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;transition:all .15s}
+.emoji-opt.selected{border-color:#FF6A00;background:rgba(47,110,245,.15)}
+
+/* CHIPS */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:7px 14px;border-radius:20px;font-size:13px;font-weight:600;border:1px solid #3A3A3C;background:#2C2C2E;color:#AEAEB2;cursor:pointer;transition:all .15s;font-family:inherit}
+.chip.selected{background:#FF6A00;color:white;border-color:#FF6A00}
+
+/* RADIO */
+.radio-group{display:flex;flex-direction:column;gap:8px}
+.radio-opt{display:flex;align-items:center;gap:10px;padding:11px 14px;border:1px solid #3A3A3C;border-radius:12px;cursor:pointer;transition:all .15s;background:#2C2C2E}
+.radio-opt.selected{border-color:#FF6A00;background:rgba(47,110,245,.1)}
+.radio-dot{width:18px;height:18px;border-radius:50%;border:2px solid #48484A;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.radio-opt.selected .radio-dot{border-color:#FF6A00;background:#FF6A00}
+.radio-opt.selected .radio-dot::after{content:'';width:6px;height:6px;background:white;border-radius:50%;display:block}
+
+/* BUTTONS */
+.btn-primary{width:100%;padding:16px;background:#FF6A00;color:white;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;transition:opacity .2s;font-family:inherit;margin-top:8px}
+.btn-primary:active{opacity:.85}
+
+/* PHOTO UPLOAD */
+.photo-upload{border:1.5px dashed #3A3A3C;border-radius:12px;padding:18px;text-align:center;cursor:pointer;color:#FF6A00;font-size:14px;font-weight:600;background:#161616}
+.photo-previews{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.photo-preview-wrap{position:relative}
+.photo-preview-wrap img{width:76px;height:76px;object-fit:cover;border-radius:10px;display:block}
+.photo-remove{position:absolute;top:-6px;right:-6px;width:20px;height:20px;background:#FF453A;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit}
+
+/* EMPTY */
+.empty{text-align:center;padding:50px 20px;color:#48484A}
+.empty-icon{font-size:44px;margin-bottom:14px}
+.empty-title{font-size:17px;font-weight:700;margin-bottom:6px;color:#636366}
+.empty-desc{font-size:13px;line-height:1.5}
+
+/* PHOTO VIEWER */
+.photo-viewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.96);z-index:300;align-items:center;justify-content:center}
+.photo-viewer.active{display:flex}
+.photo-viewer img{max-width:100%;max-height:90vh;object-fit:contain;border-radius:8px}
+.photo-viewer-close{position:absolute;top:20px;right:20px;background:none;border:none;color:white;font-size:28px;cursor:pointer}
+
+::-webkit-scrollbar{width:0}
+</style>
+</head>
+<body>
+
+<!-- ===== HOME ===== -->
+<div id="screen-home" class="screen active">
+  <div class="home-header">
+    <div class="home-header-title">모임록 📸</div>
+    <div class="home-header-sub">소중한 순간을 기록하고 정산까지</div>
+  </div>
+  <div class="content" id="gathering-list"></div>
+  <button class="fab" onclick="openNewGathering()" title="새 모임">＋</button>
+</div>
+
+<!-- ===== GATHERING DETAIL ===== -->
+<div id="screen-gathering" class="screen">
+  <div class="gd-header" id="gd-header">
+    <img id="gd-cover-img" src="" style="display:none">
+    <div class="gd-header-overlay"></div>
+    <button class="gd-header-back" onclick="showHome()">←</button>
+    <button class="gd-header-del" onclick="deleteGathering()" title="모임 삭제">🗑</button>
+    <div class="gd-header-content">
+      <div id="gd-emoji" class="gd-header-emoji"></div>
+      <div id="gd-title" class="gd-header-title"></div>
+      <div id="gd-meta" class="gd-header-meta"></div>
+    </div>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-btn-timeline" onclick="switchTab('timeline')">🗺 타임라인</button>
+    <button class="tab-btn" id="tab-btn-settlement" onclick="switchTab('settlement')">💰 정산</button>
+  </div>
+  <div class="content" style="padding-bottom:80px">
+    <div id="tab-timeline" class="tab-content active" style="padding-top:4px"></div>
+    <div id="tab-settlement" class="tab-content"></div>
+  </div>
+  <button class="fab" id="gathering-fab" onclick="fabAction()">＋</button>
+</div>
+
+<!-- ===== MODAL: NEW GATHERING ===== -->
+<div class="modal-overlay" id="modal-new-gathering" onclick="handleOverlayClick(event,'modal-new-gathering')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">새 모임 만들기</div>
+    <div class="form-group">
+      <label class="form-label">모임 이름 *</label>
+      <input class="form-input" id="ng-title" placeholder="예: 제주도 여행, 홍대 생일파티..." maxlength="40">
+    </div>
+    <div class="form-group">
+      <label class="form-label">날짜</label>
+      <input class="form-input" id="ng-date" type="date">
+    </div>
+    <div class="form-group">
+      <label class="form-label">멤버 (쉼표로 구분)</label>
+      <input class="form-input" id="ng-members" placeholder="예: 민준, 서연, 준혁, 지우">
+    </div>
+    <div class="form-group">
+      <label class="form-label">커버 이모지</label>
+      <div class="emoji-grid" id="ng-emoji-grid"></div>
+    </div>
+    <button class="btn-primary" onclick="saveNewGathering()">모임 만들기</button>
+  </div>
+</div>
+
+<!-- ===== MODAL: ADD ACTIVITY ===== -->
+<div class="modal-overlay" id="modal-add-activity" onclick="handleOverlayClick(event,'modal-add-activity')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">활동 기록 추가</div>
+    <div class="form-group">
+      <label class="form-label">시간</label>
+      <input class="form-input" id="act-time" type="time">
+    </div>
+    <div class="form-group">
+      <label class="form-label">📍 장소</label>
+      <input class="form-input" id="act-location" placeholder="예: 성산일출봉, 강남역 스타벅스..." maxlength="60">
+    </div>
+    <div class="form-group">
+      <label class="form-label">✏️ 메모</label>
+      <textarea class="form-input" id="act-memo" rows="3" placeholder="이 순간을 기록해보세요..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">📷 사진</label>
+      <div class="photo-upload" onclick="document.getElementById('act-file').click()">
+        사진 추가하기
+      </div>
+      <input type="file" id="act-file" accept="image/*" multiple style="display:none" onchange="handleActivityPhotos(this)">
+      <div class="photo-previews" id="act-previews"></div>
+    </div>
+    <button class="btn-primary" onclick="saveActivity()">기록 저장</button>
+  </div>
+</div>
+
+<!-- ===== MODAL: ADD EXPENSE ===== -->
+<div class="modal-overlay" id="modal-add-expense" onclick="handleOverlayClick(event,'modal-add-expense')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">지출 추가</div>
+    <div class="form-group">
+      <label class="form-label">항목명 *</label>
+      <input class="form-input" id="exp-title" placeholder="예: 점심 식사, 렌트카, 입장료..." maxlength="40">
+    </div>
+    <div class="form-group">
+      <label class="form-label">금액 *</label>
+      <input class="form-input" id="exp-amount" type="number" placeholder="0" min="0">
+    </div>
+    <div class="form-group">
+      <label class="form-label">결제한 사람</label>
+      <div id="exp-payer"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">분담 인원</label>
+      <div id="exp-split"></div>
+    </div>
+    <button class="btn-primary" onclick="saveExpense()">지출 추가</button>
+  </div>
+</div>
+
+<!-- ===== PHOTO VIEWER ===== -->
+<div class="photo-viewer" id="photo-viewer" onclick="closePhotoViewer()">
+  <button class="photo-viewer-close" onclick="closePhotoViewer()">✕</button>
+  <img id="photo-viewer-img" src="">
+</div>
+
+<script>
+const AVATAR_COLORS = ['#FFB3B3','#FFCBA4','#FFF0A0','#B5EAC8','#A8E6DF','#B3C8F5','#D4B8F0','#FFB8D9'];
+const COVER_EMOJIS = ['📸','🌅','🎉','🍕','🏖️','⛰️','🎮','☕','🎂','🍺','🌸','🏃','🎵','🍜','✈️','🎪','🎸','🏕️','🌃','🎨'];
+
+const state = {
+  gatherings: [],
+  currentId: null,
+  currentTab: 'timeline',
+};
+
+/* ── INIT ── */
+function init() {
+  buildEmojiGrid();
+  const raw = localStorage.getItem('moim-v2');
+  if (raw) {
+    try { state.gatherings = JSON.parse(raw).gatherings || []; } catch(e) {}
+  }
+  if (!state.gatherings.length) seedSample();
+  renderHome();
+}
+
+function save() {
+  localStorage.setItem('moim-v2', JSON.stringify({ gatherings: state.gatherings }));
+}
+
+function seedSample() {
+  state.gatherings = [
+    {
+      id: 'sample1', title: '제주도 여행', date: '2026-04-15', emoji: '🏖️',
+      coverPhoto: 'https://images.pexels.com/photos/30966647/pexels-photo-30966647.jpeg?auto=compress&cs=tinysrgb&w=600&h=320&fit=crop',
+      members: ['민준','서연','준혁','지우'],
+      activities: [
+        { id:'a1', time:'10:30', location:'성산일출봉', memo:'드디어 성산일출봉 등반! 날씨가 너무 좋아서 한라산까지 보였다 😍', photos:[] },
+        { id:'a2', time:'13:00', location:'흑돼지 식당', memo:'흑돼지 먹으러 갔는데 사실 한치 오돌뼈가 더 맛있었다는 결론', photos:[] },
+        { id:'a3', time:'16:00', location:'협재 해수욕장', memo:'에메랄드빛 바다에서 스노클링! 물고기가 발 주변에 막 와서 깜짝 놀람', photos:[] },
+      ],
+      expenses: [
+        { id:'e1', title:'렌트카', amount:120000, paidBy:'민준', splitAmong:['민준','서연','준혁','지우'] },
+        { id:'e2', title:'흑돼지 점심', amount:92000, paidBy:'서연', splitAmong:['민준','서연','준혁','지우'] },
+        { id:'e3', title:'성산일출봉 입장료', amount:24000, paidBy:'준혁', splitAmong:['민준','서연','준혁','지우'] },
+        { id:'e4', title:'편의점 + 커피', amount:38000, paidBy:'지우', splitAmong:['민준','서연','준혁','지우'] },
+      ],
+    },
+    {
+      id: 'sample2', title: '민준 생일파티 🎂', date: '2026-03-22', emoji: '🎉',
+      coverPhoto: 'https://images.pexels.com/photos/7180207/pexels-photo-7180207.jpeg?auto=compress&cs=tinysrgb&w=600&h=320&fit=crop',
+      members: ['민준','서연','지우','하은','태양'],
+      activities: [
+        { id:'b1', time:'18:00', location:'홍대 루프탑 바', memo:'깜짝 파티 성공! 민준이 완전 놀람 ㅋㅋ', photos:[] },
+        { id:'b2', time:'20:30', location:'연남동 이탈리안', memo:'파스타랑 피자 엄청 시켰는데 다 먹음. 배터짐', photos:[] },
+        { id:'b3', time:'23:00', location:'노래방 코인', memo:'3시간 동안 떼창. 목 터짐 주의', photos:[] },
+      ],
+      expenses: [
+        { id:'f1', title:'케이크', amount:54000, paidBy:'서연', splitAmong:['서연','지우','하은','태양'] },
+        { id:'f2', title:'저녁 식사', amount:186000, paidBy:'하은', splitAmong:['민준','서연','지우','하은','태양'] },
+        { id:'f3', title:'노래방', amount:75000, paidBy:'태양', splitAmong:['민준','서연','지우','하은','태양'] },
+        { id:'f4', title:'술 & 음료', amount:62000, paidBy:'지우', splitAmong:['민준','서연','지우','하은','태양'] },
+      ],
+    },
+    {
+      id: 'sample3', title: '북한산 등산', date: '2026-02-08', emoji: '⛰️',
+      coverPhoto: 'https://images.pexels.com/photos/35644310/pexels-photo-35644310.jpeg?auto=compress&cs=tinysrgb&w=600&h=320&fit=crop',
+      members: ['준혁','태양','민준'],
+      activities: [
+        { id:'c1', time:'07:00', location:'북한산 입구', memo:'아침 7시 집합. 추워서 다들 껴입고 나타남', photos:[] },
+        { id:'c2', time:'10:30', location:'백운대 정상', memo:'드디어 정상! 서울 전경이 한눈에. 뿌듯 그 자체', photos:[] },
+        { id:'c3', time:'13:00', location:'산 아래 막국수집', memo:'하산 후 막국수+수육 조합은 진리', photos:[] },
+      ],
+      expenses: [
+        { id:'g1', title:'교통비 (카풀)', amount:30000, paidBy:'준혁', splitAmong:['준혁','태양','민준'] },
+        { id:'g2', title:'점심 막국수', amount:42000, paidBy:'민준', splitAmong:['준혁','태양','민준'] },
+        { id:'g3', title:'간식 & 음료', amount:18000, paidBy:'태양', splitAmong:['준혁','태양','민준'] },
+      ],
+    },
+    {
+      id: 'sample4', title: '강릉 당일치기', date: '2026-01-18', emoji: '☕',
+      coverPhoto: 'https://images.pexels.com/photos/17140838/pexels-photo-17140838.jpeg?auto=compress&cs=tinysrgb&w=600&h=320&fit=crop',
+      members: ['서연','지우','하은'],
+      activities: [
+        { id:'d1', time:'09:30', location:'안목 해변 커피거리', memo:'인생 커피 발견. 파도 소리 들으며 마시는 아메리카노 최고', photos:[] },
+        { id:'d2', time:'12:00', location:'강릉 중앙시장', memo:'순두부찌개 + 감자전 + 오징어튀김. 돈 5천원어치 먹은 느낌', photos:[] },
+        { id:'d3', time:'15:00', location:'경포대', memo:'겨울 바다 특유의 쓸쓸함과 낭만이 공존', photos:[] },
+      ],
+      expenses: [
+        { id:'h1', title:'기차 왕복', amount:96000, paidBy:'지우', splitAmong:['서연','지우','하은'] },
+        { id:'h2', title:'점심', amount:38000, paidBy:'서연', splitAmong:['서연','지우','하은'] },
+        { id:'h3', title:'카페', amount:24000, paidBy:'하은', splitAmong:['서연','지우','하은'] },
+      ],
+    },
+  ];
+  save();
+}
+
+/* ── NAVIGATION ── */
+function showHome() {
+  renderHome();
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-home').classList.add('active');
+}
+
+function showGathering(id) {
+  state.currentId = id;
+  state.currentTab = 'timeline';
+  renderGathering();
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-gathering').classList.add('active');
+}
+
+/* ── HOME ── */
+function renderHome() {
+  const el = document.getElementById('gathering-list');
+  if (!state.gatherings.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">📷</div><div class="empty-title">아직 모임이 없어요</div><div class="empty-desc">＋ 버튼을 눌러 첫 번째 모임을 기록해보세요!</div></div>`;
+    return;
+  }
+  el.innerHTML = state.gatherings.map(g => {
+    const total = g.expenses.reduce((s,e) => s+e.amount, 0);
+    const coverStyle = g.coverPhoto ? `background:#222` : '';
+    return `<div class="gathering-card" onclick="showGathering('${g.id}')">
+      <div class="gc-cover" style="${coverStyle}">
+        ${g.coverPhoto ? `<img src="${g.coverPhoto}">` : `<span style="font-size:54px;z-index:1">${g.emoji||'📸'}</span>`}
+        <div class="gc-cover-overlay"></div>
+      </div>
+      <div class="gc-body">
+        <div class="gc-title">${esc(g.title)}</div>
+        <div class="gc-meta">
+          <span>📅 ${fmtDate(g.date)}</span>
+          <span>👥 ${g.members.length}명</span>
+          ${total > 0 ? `<span>💰 ${fmtMoney(total)}</span>` : ''}
+          <span>📌 ${g.activities.length}개 기록</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── GATHERING DETAIL ── */
+function renderGathering() {
+  const g = cur();
+  if (!g) return;
+  const img = document.getElementById('gd-cover-img');
+  if (g.coverPhoto) { img.src = g.coverPhoto; img.style.display = ''; }
+  else { img.style.display = 'none'; }
+  document.getElementById('gd-emoji').textContent = g.coverPhoto ? '' : (g.emoji || '📸');
+  document.getElementById('gd-title').textContent = g.title;
+  document.getElementById('gd-meta').textContent = `📅 ${fmtDate(g.date)}  👥 ${g.members.join(', ')||'멤버 없음'}`;
+  renderTimeline();
+  renderSettlement();
+  switchTab('timeline');
+}
+
+function renderTimeline() {
+  const g = cur();
+  const el = document.getElementById('tab-timeline');
+  if (!g.activities.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🗺️</div><div class="empty-title">아직 기록이 없어요</div><div class="empty-desc">＋ 버튼을 눌러 이 모임의 첫 활동을 기록해보세요!</div></div>`;
+    return;
+  }
+  const sorted = [...g.activities].sort((a,b) => a.time.localeCompare(b.time));
+  el.innerHTML = `<div class="timeline">${sorted.map((act, i) => `
+    <div class="tl-item">
+      <div class="tl-left">
+        <div class="tl-time">${act.time}</div>
+        <div class="tl-dot"></div>
+        ${i < sorted.length-1 ? '<div class="tl-line"></div>' : ''}
+      </div>
+      <div class="tl-card">
+        ${act.location ? `<div class="tl-location">📍 ${esc(act.location)}</div>` : ''}
+        ${act.memo ? `<div class="tl-memo">${esc(act.memo)}</div>` : ''}
+        ${act.photos && act.photos.length ? `<div class="tl-photos">${act.photos.map(p=>`<img class="tl-photo" src="${p}" onclick="viewPhoto('${p}')" loading="lazy">`).join('')}</div>` : ''}
+        <div class="tl-footer"><button class="del-btn" onclick="deleteActivity('${act.id}')">🗑 삭제</button></div>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+function renderSettlement() {
+  const g = cur();
+  const el = document.getElementById('tab-settlement');
+  const total = g.expenses.reduce((s,e)=>s+e.amount,0);
+  const perPerson = g.members.length ? total/g.members.length : 0;
+  const {balance, transactions} = calcSettlement(g.members, g.expenses);
+
+  const expHtml = g.expenses.length ? g.expenses.map(e=>`
+    <div class="expense-item">
+      <div>
+        <div class="exp-title">${esc(e.title)}</div>
+        <div class="exp-meta">${esc(e.paidBy)} 결제 · ${e.splitAmong.length}명 분담</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="exp-amount">${fmtMoney(e.amount)}</div>
+        <button class="del-btn" onclick="deleteExpense('${e.id}')">🗑</button>
+      </div>
+    </div>`).join('')
+    : `<div class="empty" style="padding:24px 0"><div class="empty-icon">💸</div><div class="empty-title">지출 내역이 없어요</div></div>`;
+
+  const balHtml = g.members.length ? `
+    <div class="section-mb">
+      <div class="section-title">개인 현황</div>
+      <div class="balance-card">
+        ${g.members.map((m,i)=>{
+          const b = balance[m]||0;
+          const cls = b>50?'bal-pos':b<-50?'bal-neg':'bal-zero';
+          const label = b>50?'받아야 함':b<-50?'내야 함':'정산 완료';
+          return `<div class="member-row">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="member-avatar" style="background:${AVATAR_COLORS[i%AVATAR_COLORS.length]};color:white">${m[0]}</div>
+              <span style="font-weight:600">${esc(m)}</span>
+            </div>
+            <div style="text-align:right">
+              <div class="${cls}">${b>0?'+':''}${fmtMoney(Math.round(b))}</div>
+              <div style="font-size:11px;color:#A0AEC0">${label}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
+  const txHtml = transactions.length ? `
+    <div class="section-mb">
+      <div class="section-title">정산 방법</div>
+      ${transactions.map(t=>`
+        <div class="transfer-card">
+          <div class="member-avatar" style="background:${AVATAR_COLORS[g.members.indexOf(t.from)%AVATAR_COLORS.length]};color:white">${t.from[0]}</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:700">${esc(t.from)}</div>
+            <div style="font-size:12px;color:#A0AEC0">→ ${esc(t.to)}</div>
+          </div>
+          <div class="transfer-amount">${fmtMoney(Math.round(t.amount))}</div>
+        </div>`).join('')}
+    </div>` : total > 0 ? `<div style="text-align:center;padding:16px;color:#48BB78;font-weight:700">✅ 모두 정산 완료!</div>` : '';
+
+  el.innerHTML = `
+    <div style="padding-top:4px">
+      <div class="total-card">
+        <div class="total-label">총 지출</div>
+        <div class="total-amount">${fmtMoney(total)}</div>
+        ${g.members.length ? `<div class="total-per">1인당 ${fmtMoney(Math.round(perPerson))}</div>` : ''}
+      </div>
+      <div class="section-mb">
+        <div class="section-title">지출 내역</div>
+        ${expHtml}
+      </div>
+      ${balHtml}
+      ${txHtml}
+    </div>`;
+}
+
+/* ── TABS ── */
+function switchTab(tab) {
+  state.currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  document.getElementById(`tab-btn-${tab}`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+}
+
+function fabAction() {
+  if (state.currentTab === 'timeline') openAddActivity();
+  else openAddExpense();
+}
+
+/* ── SETTLEMENT CALC ── */
+function calcSettlement(members, expenses) {
+  const paid = {}, owes = {};
+  members.forEach(m=>{ paid[m]=0; owes[m]=0; });
+  expenses.forEach(e=>{
+    if(paid[e.paidBy]!==undefined) paid[e.paidBy]+=e.amount;
+    const share = e.amount / e.splitAmong.length;
+    e.splitAmong.forEach(m=>{ if(owes[m]!==undefined) owes[m]+=share; });
+  });
+  const balance={};
+  members.forEach(m=>{ balance[m]=(paid[m]||0)-(owes[m]||0); });
+  const debtors = members.filter(m=>balance[m]<-0.5).map(m=>({name:m,amount:-balance[m]})).sort((a,b)=>b.amount-a.amount);
+  const creditors = members.filter(m=>balance[m]>0.5).map(m=>({name:m,amount:balance[m]})).sort((a,b)=>b.amount-a.amount);
+  const transactions=[];
+  let i=0,j=0;
+  while(i<debtors.length&&j<creditors.length){
+    const t=Math.min(debtors[i].amount,creditors[j].amount);
+    if(t>0.5) transactions.push({from:debtors[i].name,to:creditors[j].name,amount:t});
+    debtors[i].amount-=t; creditors[j].amount-=t;
+    if(debtors[i].amount<0.5) i++;
+    if(creditors[j].amount<0.5) j++;
+  }
+  return {balance,transactions};
+}
+
+/* ── NEW GATHERING ── */
+let selEmoji = '📸';
+
+function buildEmojiGrid() {
+  document.getElementById('ng-emoji-grid').innerHTML = COVER_EMOJIS.map(e=>
+    `<div class="emoji-opt${e===selEmoji?' selected':''}" data-e="${e}" onclick="pickEmoji('${e}')">${e}</div>`
+  ).join('');
+}
+
+function pickEmoji(e) {
+  selEmoji = e;
+  document.querySelectorAll('.emoji-opt').forEach(el=>el.classList.toggle('selected',el.dataset.e===e));
+}
+
+function openNewGathering() {
+  document.getElementById('ng-title').value='';
+  document.getElementById('ng-date').value=toDay();
+  document.getElementById('ng-members').value='';
+  selEmoji='📸';
+  buildEmojiGrid();
+  document.getElementById('modal-new-gathering').classList.add('active');
+}
+
+function closeNewGathering() {
+  document.getElementById('modal-new-gathering').classList.remove('active');
+}
+
+function saveNewGathering() {
+  const title = document.getElementById('ng-title').value.trim();
+  if(!title){ alert('모임 이름을 입력해주세요'); return; }
+  const date = document.getElementById('ng-date').value;
+  const membersRaw = document.getElementById('ng-members').value;
+  const members = membersRaw ? membersRaw.split(',').map(m=>m.trim()).filter(Boolean) : [];
+  state.gatherings.unshift({ id:'g'+Date.now(), title, date, emoji:selEmoji, coverPhoto:null, members, activities:[], expenses:[] });
+  save(); closeNewGathering(); renderHome();
+}
+
+/* ── ADD ACTIVITY ── */
+let pendingPhotos = [];
+
+function openAddActivity() {
+  pendingPhotos = [];
+  document.getElementById('act-time').value = nowTime();
+  document.getElementById('act-location').value = '';
+  document.getElementById('act-memo').value = '';
+  document.getElementById('act-previews').innerHTML = '';
+  document.getElementById('act-file').value = '';
+  document.getElementById('modal-add-activity').classList.add('active');
+}
+
+function closeAddActivity() {
+  document.getElementById('modal-add-activity').classList.remove('active');
+}
+
+function handleActivityPhotos(input) {
+  Array.from(input.files).forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=e=>{ pendingPhotos.push(e.target.result); renderPreviews(); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPreviews() {
+  document.getElementById('act-previews').innerHTML = pendingPhotos.map((src,i)=>`
+    <div class="photo-preview-wrap">
+      <img src="${src}">
+      <button class="photo-remove" onclick="removePendingPhoto(${i})">✕</button>
+    </div>`).join('');
+}
+
+function removePendingPhoto(i) {
+  pendingPhotos.splice(i,1); renderPreviews();
+}
+
+function saveActivity() {
+  const time = document.getElementById('act-time').value || nowTime();
+  const location = document.getElementById('act-location').value.trim();
+  const memo = document.getElementById('act-memo').value.trim();
+  if(!location&&!memo&&!pendingPhotos.length){ alert('장소, 메모 또는 사진 중 하나 이상 입력해주세요'); return; }
+  cur().activities.push({ id:'a'+Date.now(), time, location, memo, photos:[...pendingPhotos] });
+  save(); closeAddActivity(); renderTimeline();
+}
+
+function deleteActivity(id) {
+  if(!confirm('이 기록을 삭제할까요?')) return;
+  cur().activities = cur().activities.filter(a=>a.id!==id);
+  save(); renderTimeline();
+}
+
+/* ── ADD EXPENSE ── */
+let selPayer = null;
+let selSplit = [];
+
+function openAddExpense() {
+  const g = cur();
+  if(!g.members.length){ alert('멤버가 없어요. 모임에 멤버를 추가해야 정산할 수 있어요.\n모임을 삭제하고 다시 만들거나 멤버가 있는 모임을 이용해주세요.'); return; }
+  document.getElementById('exp-title').value='';
+  document.getElementById('exp-amount').value='';
+  selPayer = g.members[0];
+  selSplit = [...g.members];
+  renderPayer(); renderSplit();
+  document.getElementById('modal-add-expense').classList.add('active');
+}
+
+function closeAddExpense() {
+  document.getElementById('modal-add-expense').classList.remove('active');
+}
+
+function renderPayer() {
+  const g = cur();
+  document.getElementById('exp-payer').innerHTML = `<div class="radio-group">${g.members.map((m,i)=>`
+    <div class="radio-opt${selPayer===m?' selected':''}" onclick="pickPayer('${m}')">
+      <div class="radio-dot"></div>
+      <div class="member-avatar" style="background:${AVATAR_COLORS[i%AVATAR_COLORS.length]};color:white;width:28px;height:28px;font-size:12px">${m[0]}</div>
+      <span style="font-size:14px;font-weight:500">${esc(m)}</span>
+    </div>`).join('')}</div>`;
+}
+
+function pickPayer(name) {
+  selPayer=name; renderPayer();
+}
+
+function renderSplit() {
+  const g = cur();
+  document.getElementById('exp-split').innerHTML = `<div class="chips">${g.members.map(m=>`
+    <button class="chip${selSplit.includes(m)?' selected':''}" onclick="toggleSplit('${m}')">${esc(m)}</button>`).join('')}</div>`;
+}
+
+function toggleSplit(name) {
+  if(selSplit.includes(name)){
+    if(selSplit.length>1) selSplit=selSplit.filter(m=>m!==name);
+  } else { selSplit.push(name); }
+  renderSplit();
+}
+
+function saveExpense() {
+  const title = document.getElementById('exp-title').value.trim();
+  const amount = parseFloat(document.getElementById('exp-amount').value);
+  if(!title){ alert('항목명을 입력해주세요'); return; }
+  if(!amount||amount<=0){ alert('올바른 금액을 입력해주세요'); return; }
+  if(!selPayer){ alert('결제자를 선택해주세요'); return; }
+  if(!selSplit.length){ alert('분담 인원을 선택해주세요'); return; }
+  cur().expenses.push({ id:'e'+Date.now(), title, amount, paidBy:selPayer, splitAmong:[...selSplit] });
+  save(); closeAddExpense(); renderSettlement();
+}
+
+function deleteExpense(id) {
+  if(!confirm('이 지출을 삭제할까요?')) return;
+  cur().expenses = cur().expenses.filter(e=>e.id!==id);
+  save(); renderSettlement();
+}
+
+/* ── DELETE GATHERING ── */
+function deleteGathering() {
+  if(!confirm(`"${cur().title}" 모임을 삭제할까요?\n모든 기록과 정산 내역이 사라집니다.`)) return;
+  state.gatherings = state.gatherings.filter(g=>g.id!==state.currentId);
+  save(); showHome();
+}
+
+/* ── PHOTO VIEWER ── */
+function viewPhoto(src) {
+  document.getElementById('photo-viewer-img').src=src;
+  document.getElementById('photo-viewer').classList.add('active');
+}
+function closePhotoViewer() {
+  document.getElementById('photo-viewer').classList.remove('active');
+}
+
+/* ── MODAL OVERLAY ── */
+function handleOverlayClick(e, id) {
+  if(e.target.classList.contains('modal-overlay')) document.getElementById(id).classList.remove('active');
+}
+
+/* ── UTILS ── */
+function cur() { return state.gatherings.find(g=>g.id===state.currentId); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtMoney(n){ return Math.round(n).toLocaleString('ko-KR')+'원'; }
+function fmtDate(d){
+  if(!d) return '';
+  const [y,m,day]=d.split('-');
+  return `${y}년 ${parseInt(m)}월 ${parseInt(day)}일`;
+}
+function toDay(){ return new Date().toISOString().split('T')[0]; }
+function nowTime(){
+  const d=new Date();
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+init();
+</script>
+</body>
+</html>
