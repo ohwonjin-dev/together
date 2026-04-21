@@ -234,13 +234,12 @@ textarea.form-input{resize:none}
     </div>
     <div class="form-group">
       <label class="form-label">📷 사진</label>
-      <div class="photo-upload" onclick="document.getElementById('act-file').click()">
-        사진 추가하기
-      </div>
-      <input type="file" id="act-file" accept="image/*" multiple style="display:none" onchange="handleActivityPhotos(this)">
+      <label class="photo-upload" for="act-file">사진 추가하기</label>
+      <input type="file" id="act-file" accept="image/*" multiple style="display:none">
       <div class="photo-previews" id="act-previews"></div>
     </div>
-    <button class="btn-primary" onclick="saveActivity()">기록 저장</button>
+    <div id="act-save-error" style="display:none;color:#FF453A;font-size:13px;margin-bottom:8px;padding:0 4px"></div>
+    <button class="btn-primary" id="act-save-btn" onclick="saveActivity()">기록 저장</button>
   </div>
 </div>
 
@@ -293,7 +292,22 @@ function init() {
     try { state.gatherings = JSON.parse(raw).gatherings || []; } catch(e) {}
   }
   if (!state.gatherings.length) seedSample();
+  purgeLargePhotos();
   renderHome();
+}
+
+function purgeLargePhotos() {
+  // Remove base64 photos over 250KB — these are pre-compression leftovers filling up storage
+  const LIMIT = 250000;
+  let removed = 0;
+  state.gatherings.forEach(g => {
+    (g.activities || []).forEach(a => {
+      const before = (a.photos || []).length;
+      a.photos = (a.photos || []).filter(p => !(typeof p === 'string' && p.startsWith('data:') && p.length > LIMIT));
+      removed += before - a.photos.length;
+    });
+  });
+  if (removed > 0) save();
 }
 
 function save() {
@@ -617,17 +631,18 @@ function openAddActivity() {
   document.getElementById('act-location').value = '';
   document.getElementById('act-memo').value = '';
   document.getElementById('act-previews').innerHTML = '';
+  showActError('');
+  // Replace file input to clear previous selection (iOS-safe reset)
   const old = document.getElementById('act-file');
   const fresh = old.cloneNode(false);
-  fresh.id = 'act-file';
-  fresh.setAttribute('onchange', 'handleActivityPhotos(this)');
   old.parentNode.replaceChild(fresh, old);
+  fresh.addEventListener('change', function() { handleActivityPhotos(this); });
   updateSaveBtn();
   document.getElementById('modal-add-activity').classList.add('active');
 }
 
 function updateSaveBtn() {
-  const btn = document.querySelector('#modal-add-activity .btn-primary');
+  const btn = document.getElementById('act-save-btn');
   if (!btn) return;
   if (compressionCount > 0) {
     btn.textContent = '사진 처리 중…';
@@ -640,22 +655,42 @@ function updateSaveBtn() {
   }
 }
 
+function showActError(msg) {
+  const el = document.getElementById('act-save-error');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
 function closeAddActivity() {
   document.getElementById('modal-add-activity').classList.remove('active');
 }
 
 function compressImage(dataUrl, callback) {
+  let called = false;
+  const done = (result) => {
+    if (called) return;
+    called = true;
+    callback(result);
+  };
+  // 10s safety timeout — prevents compressionCount stuck if browser hangs
+  const timer = setTimeout(() => done(dataUrl), 10000);
   const img = new Image();
   img.onload = function() {
-    const MAX = 800;
-    let w = img.width, h = img.height;
-    if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
-    if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-    callback(canvas.toDataURL('image/jpeg', 0.55));
+    clearTimeout(timer);
+    try {
+      const MAX = 800;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const out = canvas.toDataURL('image/jpeg', 0.55);
+      done(out && out.length > 100 ? out : dataUrl);
+    } catch(e) { done(dataUrl); }
   };
+  img.onerror = function() { clearTimeout(timer); done(dataUrl); };
   img.src = dataUrl;
 }
 
@@ -682,17 +717,19 @@ function removePendingPhoto(i) {
 }
 
 function saveActivity() {
-  if (compressionCount > 0) return;
+  showActError('');
+  if (compressionCount > 0) { showActError('사진 처리 중입니다. 잠시 후 다시 시도해주세요.'); return; }
   const g = cur();
-  if (!g) return;
+  if (!g) { showActError('모임 정보를 불러올 수 없습니다. 페이지를 새로고침해주세요.'); return; }
   const time = document.getElementById('act-time').value || nowTime();
   const location = document.getElementById('act-location').value.trim();
   const memo = document.getElementById('act-memo').value.trim();
-  if(!location&&!memo&&!pendingPhotos.length){ alert('장소, 메모 또는 사진 중 하나 이상 입력해주세요'); return; }
-  const act = { id:'a'+Date.now(), time, location, memo, photos:[...pendingPhotos] };
+  if (!location && !memo && !pendingPhotos.length) { showActError('장소, 메모, 사진 중 하나 이상 입력해주세요.'); return; }
+  const act = { id: 'a' + Date.now(), time, location, memo, photos: [...pendingPhotos] };
   g.activities.push(act);
-  if (!save()) { g.activities.pop(); return; }
-  closeAddActivity(); renderTimeline();
+  if (!save()) { g.activities.pop(); showActError('저장 실패: 저장 공간이 부족합니다. 오래된 기록의 사진을 삭제해주세요.'); return; }
+  closeAddActivity();
+  renderTimeline();
 }
 
 function deleteActivity(id) {
