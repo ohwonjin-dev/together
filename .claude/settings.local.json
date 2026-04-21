@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "WebSearch",
+      "WebFetch(domain:unsplash.com)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:www.pexels.com)",
+      "Bash(gh auth *)",
+      "Bash(/opt/homebrew/bin/brew --version)",
+      "Bash(/usr/local/bin/brew --version)",
+      "Bash(git --version)",
+      "Bash(ssh-keygen -t ed25519 -C \"ohwonjin-dev@github\" -f ~/.ssh/id_ed25519 -N \"\")",
+      "Bash(ssh-keyscan github.com)",
+      "Bash(ssh -T git@github.com)"
+    ]
+  }
+}
