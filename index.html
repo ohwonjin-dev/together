@@ -223,7 +223,22 @@ textarea.form-input{resize:none}
     <div class="modal-title" id="ng-modal-title">새 모임 만들기</div>
     <div class="form-group">
       <label class="form-label">모임 이름 *</label>
-      <input class="form-input" id="ng-title" placeholder="예: 제주도 여행, 홍대 생일파티..." maxlength="40">
+      <input class="form-input" id="ng-title" placeholder="예: 제주도 여행, 홍대 생일파티..." maxlength="40" oninput="debouncedAutoPhoto(this.value)">
+    </div>
+    <div class="form-group">
+      <label class="form-label">커버 사진</label>
+      <div id="ng-cover-wrap" style="border-radius:14px;overflow:hidden;height:148px;background:#1A1A1A;position:relative;margin-bottom:10px">
+        <img id="ng-cover-img" style="width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .4s">
+        <div id="ng-cover-placeholder" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;pointer-events:none">
+          <span id="ng-cover-ph-icon" style="font-size:30px">🖼️</span>
+          <span id="ng-cover-ph-text" style="font-size:12px;color:#636366">모임 이름 입력 시 자동 추천됩니다</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="ng-refresh-btn" onclick="refreshAutoPhoto()" style="flex:1;padding:9px 0;border-radius:10px;border:1px solid #3A3A3C;background:none;color:#8E8E93;font-size:13px;cursor:pointer;opacity:.4" disabled>🔄 다른 사진</button>
+        <label for="ng-cover-input" style="flex:1;padding:9px 0;border-radius:10px;border:1px solid #3A3A3C;background:none;color:#8E8E93;font-size:13px;cursor:pointer;text-align:center;display:block">📷 직접 업로드</label>
+        <input type="file" id="ng-cover-input" accept="image/*" style="display:none" onchange="handleCoverPhotoChange(event)">
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">날짜</label>
@@ -232,10 +247,6 @@ textarea.form-input{resize:none}
     <div class="form-group">
       <label class="form-label">멤버 (쉼표로 구분)</label>
       <input class="form-input" id="ng-members" placeholder="예: 민준, 서연, 준혁, 지우">
-    </div>
-    <div class="form-group">
-      <label class="form-label">커버 이모지</label>
-      <div class="emoji-grid" id="ng-emoji-grid"></div>
     </div>
     <button class="btn-primary" id="ng-save-btn" onclick="saveNewGathering()">모임 만들기</button>
   </div>
@@ -324,8 +335,7 @@ const state = {
 
 /* ── INIT ── */
 async function init() {
-  buildEmojiGrid();
-  loadAppTitle();
+  await loadAppTitle();
   await loadFromDB();
   document.getElementById('loading-screen').style.display = 'none';
   if (!handleURLRouting()) {
@@ -518,8 +528,8 @@ function renderTimeline() {
         ${act.memo ? `<div class="tl-memo">${esc(act.memo)}</div>` : ''}
         ${act.photos?.length ? `<div class="tl-photos">${act.photos.map(p=>`<img class="tl-photo" src="${p}" onclick="viewPhoto('${p}')" loading="lazy">`).join('')}</div>` : ''}
         <div class="tl-footer">
-          <button class="edit-btn" onclick="openAddActivity('${act.id}')">✏️ 편집</button>
-          <button class="del-btn" onclick="deleteActivity('${act.id}')">🗑 삭제</button>
+          <button class="edit-btn" onclick="openAddActivity('${act.id}')">편집</button>
+          <button class="del-btn" onclick="deleteActivity('${act.id}')">삭제</button>
         </div>
       </div>
     </div>`).join('')}</div>`;
@@ -638,22 +648,109 @@ function calcSettlement(members, expenses) {
 }
 
 /* ── NEW / EDIT GATHERING ── */
-let selEmoji = '📸';
 let editingGatheringId = null;
+let pendingCoverPhoto = null;
+let autoPhotoTimer = null;
 
-function buildEmojiGrid() {
-  document.getElementById('ng-emoji-grid').innerHTML = COVER_EMOJIS.map(e=>
-    `<div class="emoji-opt${e===selEmoji?' selected':''}" data-e="${e}" onclick="pickEmoji('${e}')">${e}</div>`
-  ).join('');
+const KO_EN = {
+  '여행':'travel','등산':'hiking','피자':'pizza','생일':'birthday',
+  '파티':'party','바베큐':'barbecue','카페':'cafe','바다':'beach',
+  '캠핑':'camping','술':'drinks','회식':'dinner','졸업':'graduation',
+  '결혼':'wedding','스포츠':'sports','축구':'soccer','농구':'basketball','야구':'baseball',
+  '영화':'cinema','음악':'music','전시':'exhibition','맛집':'restaurant',
+  '데이트':'date','친구':'friends','가족':'family','산':'mountain',
+  '공원':'park','제주':'jeju','서울':'seoul','부산':'busan',
+  '라멘':'ramen','스시':'sushi','치킨':'chicken','고기':'bbq',
+};
+
+function toEnglishKeyword(title) {
+  const hits = [];
+  for (const [ko, en] of Object.entries(KO_EN)) {
+    if (title.includes(ko)) hits.push(en);
+  }
+  if (hits.length) return hits.slice(0, 3).join(',');
+  const stripped = title.replace(/[가-힣\s]+/g, '').trim();
+  return stripped || 'gathering';
 }
 
-function pickEmoji(e) {
-  selEmoji=e;
-  document.querySelectorAll('.emoji-opt').forEach(el=>el.classList.toggle('selected',el.dataset.e===e));
+function strHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function debouncedAutoPhoto(value) {
+  clearTimeout(autoPhotoTimer);
+  if (!value.trim()) return;
+  autoPhotoTimer = setTimeout(() => fetchAutoPhoto(value), 700);
+}
+
+function fetchAutoPhoto(title) {
+  const kw = toEnglishKeyword(title);
+  const lock = Math.floor(Math.random() * 9000) + 1000;
+  loadCoverPhoto(`https://loremflickr.com/640/360/${kw}?lock=${lock}`, false, title);
+}
+
+function refreshAutoPhoto() {
+  const title = document.getElementById('ng-title').value.trim();
+  if (!title) return;
+  const kw = toEnglishKeyword(title);
+  const lock = Math.floor(Math.random() * 9000) + 1000;
+  loadCoverPhoto(`https://loremflickr.com/640/360/${kw}?lock=${lock}`, false, title);
+}
+
+function loadCoverPhoto(url, isUpload, titleHint) {
+  const img = document.getElementById('ng-cover-img');
+  const ph = document.getElementById('ng-cover-placeholder');
+  document.getElementById('ng-cover-ph-icon').textContent = '⏳';
+  document.getElementById('ng-cover-ph-text').textContent = '사진 불러오는 중...';
+  ph.style.display = 'flex';
+  img.style.opacity = '0';
+  let settled = false;
+  const fallback = () => {
+    if (settled) return;
+    settled = true;
+    img.onload = null; img.onerror = null;
+    img.src = '';
+    if (!url.includes('picsum')) {
+      const seed = titleHint ? strHash(titleHint) % 1000 : Math.floor(Math.random() * 1000);
+      loadCoverPhoto(`https://picsum.photos/seed/${seed}/640/360`, isUpload, null);
+    } else {
+      document.getElementById('ng-cover-ph-icon').textContent = '😅';
+      document.getElementById('ng-cover-ph-text').textContent = '사진을 불러올 수 없어요. 직접 업로드해 주세요';
+    }
+  };
+  const timer = setTimeout(fallback, 3500);
+  img.onload = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    img.style.opacity = '1';
+    ph.style.display = 'none';
+    pendingCoverPhoto = url;
+    const btn = document.getElementById('ng-refresh-btn');
+    btn.disabled = false; btn.style.opacity = '1';
+  };
+  img.onerror = () => { clearTimeout(timer); fallback(); };
+  img.src = url;
+}
+
+function handleCoverPhotoChange(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  compressImageFile(file, (result) => {
+    if (!result) { showToast('이미지 처리 실패'); return; }
+    loadCoverPhoto(result, true);
+  });
+  e.target.value = '';
 }
 
 function openNewGathering(gId = null) {
   editingGatheringId = gId;
+  clearTimeout(autoPhotoTimer);
+  const img = document.getElementById('ng-cover-img');
+  const ph = document.getElementById('ng-cover-placeholder');
+  const btn = document.getElementById('ng-refresh-btn');
   if (gId) {
     const g = state.gatherings.find(x => x.id === gId);
     if (!g) return;
@@ -662,16 +759,33 @@ function openNewGathering(gId = null) {
     document.getElementById('ng-title').value = g.title;
     document.getElementById('ng-date').value = g.date;
     document.getElementById('ng-members').value = g.members.join(', ');
-    selEmoji = g.emoji || '📸';
+    pendingCoverPhoto = g.coverPhoto || null;
+    if (pendingCoverPhoto) {
+      img.src = pendingCoverPhoto;
+      img.style.opacity = '1';
+      ph.style.display = 'none';
+      btn.disabled = false; btn.style.opacity = '1';
+    } else {
+      img.src = ''; img.style.opacity = '0';
+      document.getElementById('ng-cover-ph-icon').textContent = '🖼️';
+      document.getElementById('ng-cover-ph-text').textContent = '모임 이름 입력 시 자동 추천됩니다';
+      ph.style.display = 'flex';
+      btn.disabled = true; btn.style.opacity = '.4';
+      fetchAutoPhoto(g.title);
+    }
   } else {
     document.getElementById('ng-modal-title').textContent = '새 모임 만들기';
     document.getElementById('ng-save-btn').textContent = '모임 만들기';
     document.getElementById('ng-title').value = '';
     document.getElementById('ng-date').value = toDay();
     document.getElementById('ng-members').value = '';
-    selEmoji = '📸';
+    pendingCoverPhoto = null;
+    img.src = ''; img.style.opacity = '0';
+    document.getElementById('ng-cover-ph-icon').textContent = '🖼️';
+    document.getElementById('ng-cover-ph-text').textContent = '모임 이름 입력 시 자동 추천됩니다';
+    ph.style.display = 'flex';
+    btn.disabled = true; btn.style.opacity = '.4';
   }
-  buildEmojiGrid();
   document.getElementById('modal-new-gathering').classList.add('active');
 }
 
@@ -688,38 +802,39 @@ async function saveNewGathering() {
 
   if (editingGatheringId) {
     const { error } = await sb.from('gatherings').update({
-      title, date, members, cover_emoji: selEmoji
+      title, date, members, cover_photo: pendingCoverPhoto || null
     }).eq('id', editingGatheringId);
     if (error) { alert('수정 실패: ' + error.message); return; }
     const g = state.gatherings.find(x => x.id === editingGatheringId);
-    if (g) { g.title = title; g.date = date; g.members = members; g.emoji = selEmoji; }
+    if (g) { g.title = title; g.date = date; g.members = members; g.coverPhoto = pendingCoverPhoto || ''; }
     closeNewGathering();
     renderGathering();
+    renderHome();
   } else {
     const id = 'g' + Date.now();
     const { error } = await sb.from('gatherings').insert({
-      id, title, date, members, cover_emoji: selEmoji, cover_photo: null, location: ''
+      id, title, date, members, cover_photo: pendingCoverPhoto || null, location: ''
     });
     if (error) { alert('저장 실패: ' + error.message); return; }
-    state.gatherings.unshift({ id, title, date, emoji: selEmoji, coverPhoto: '', members, activities: [], expenses: [] });
+    state.gatherings.unshift({ id, title, date, emoji: '📸', coverPhoto: pendingCoverPhoto || '', members, activities: [], expenses: [] });
     closeNewGathering();
     renderHome();
   }
 }
 
 /* ── APP TITLE ── */
-function loadAppTitle() {
-  const saved = localStorage.getItem('app-title');
-  if (saved) document.getElementById('app-title-text').textContent = saved;
+async function loadAppTitle() {
+  const { data } = await sb.from('settings').select('value').eq('key', 'app_title').single();
+  if (data?.value) document.getElementById('app-title-text').textContent = data.value;
 }
 
-function editAppTitle() {
+async function editAppTitle() {
   const current = document.getElementById('app-title-text').textContent;
   const next = prompt('앱 이름을 입력해주세요', current);
   if (next === null) return;
   const trimmed = next.trim() || '모임록 📸';
   document.getElementById('app-title-text').textContent = trimmed;
-  localStorage.setItem('app-title', trimmed);
+  await sb.from('settings').upsert({ key: 'app_title', value: trimmed });
 }
 
 /* ── ADD / EDIT ACTIVITY ── */
